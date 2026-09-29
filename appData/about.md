@@ -90,17 +90,19 @@ In 2023, the Atlanta Botanical Garden, The Morton Arboretum, and The Montgomery 
 
 ## Acknowledgements
 Development of this version of the Gap Analysis and Metacollection Management tool was supported by:
-* Botanic Gardens Conservation International-US
-* Institute of Museum and Library Services
-* United States Botanic Garden
+* [Botanic Gardens Conservation International-US](https://www.bgci.org/us/)
+* [Institute of Museum and Library Services](https://www.imls.gov/)
+* [United States Botanic Garden](https://www.usbg.gov/)
 
 The Gap Analysis and Metacollection Management tool was developed by a core project team from the following organizations:
-* Colorado State University - Geospatial Data Centroid
-* Atlanta Botanical Garden
-* The Morton Arboretum
-* Montgomery Botanical Center
-* New York Botanical Garden
-* Botanic Gardens Conservation International-US
+* [Atlanta Botanical Garden](https://atlantabg.org/)
+* [Botanic Gardens Conservation International-US](https://www.bgci.org/us/)
+* [Montgomery Botanical Center](https://www.montgomerybotanical.org/)
+* [The Morton Arboretum](https://mortonarb.org/)
+* [New York Botanical Garden](https://www.nybg.org/)
+* [Zest Data Group](https://zestdg.com)
+
+Questions about the application or its code base can be sent to [Zest Data Group](https://zestdg.com) at [hello@zestdg.com](mailto:hello@zestdg.com).
 
 ## References & Relevant reading
 * Beckman, E., Meyer, A., Denvir, A., Gill, D., Man, G., Pivorunas, D., Shaw, K., & Westwood, M. (2019). Conservation Gap Analysis of Native U.S. Oaks. Lisle, IL: The Morton Arboretum.

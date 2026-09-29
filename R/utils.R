@@ -57,7 +57,7 @@ flag_invalid_germplasm <- function(df) {
 # global.R (update that one constant when the repository moves); the version
 # comes from the VERSION file via APP_VERSION.
 footer_ui <- function() {
-  repo_url <- if (exists("REPO_URL")) REPO_URL else "https://github.com/ihellman/gamma_sandbox"
+  repo_url <- if (exists("REPO_URL")) REPO_URL else "https://github.com/Zest-Data-Group/GAMMa"
   version  <- if (exists("APP_VERSION")) APP_VERSION else "dev"
   tags$footer(
     class = "footer-modern",
@@ -111,6 +111,10 @@ footer_ui <- function() {
           h5("Contact"),
           tags$ul(
             class = "list-unstyled",
+            tags$li(
+              tags$i(class = "bi bi-envelope"),
+              tags$a(href = "mailto:hello@zestdg.com", " hello@zestdg.com", class = "footer-link")
+            ),
             tags$li(
               tags$i(class = "bi bi-github"),
               tags$a(href = repo_url, target = "_blank", " View Source Code", class = "footer-link")
