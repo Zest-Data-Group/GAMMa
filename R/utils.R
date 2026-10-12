@@ -58,6 +58,7 @@ flag_invalid_germplasm <- function(df) {
 app_banner_ui <- function(banner = if (exists("landing_text")) landing_text$banner else NULL) {
   if (is.null(banner) || !isTRUE(banner$show)) return(NULL)
   email <- if (exists("CONTACT_EMAIL")) CONTACT_EMAIL else "hello@zestdg.com"
+  feedback <- if (exists("FEEDBACK_URL")) FEEDBACK_URL else NULL
   div(
     class = "alert alert-warning alert-dismissible app-banner mb-0",
     role = "alert",
@@ -66,7 +67,12 @@ app_banner_ui <- function(banner = if (exists("landing_text")) landing_text$bann
     tags$span(
       class = "app-banner-contact",
       banner$contact_label,
-      tags$a(href = paste0("mailto:", email), email)
+      tags$a(href = paste0("mailto:", email), email),
+      if (!is.null(feedback)) tagList(
+        " \u00b7 ",
+        tags$a(href = feedback, target = "_blank", rel = "noopener noreferrer",
+               tags$i(class = "bi bi-chat-left-text me-1"), "Give feedback")
+      )
     ),
     tags$button(type = "button", class = "btn-close", `data-bs-dismiss` = "alert", `aria-label` = "Close")
   )
@@ -95,6 +101,7 @@ markdown_vars <- function() {
     APP_VERSION   = if (exists("APP_VERSION")) APP_VERSION else "dev",
     APP_URL       = if (exists("APP_URL")) APP_URL else "",
     CONTACT_EMAIL = if (exists("CONTACT_EMAIL")) CONTACT_EMAIL else "hello@zestdg.com",
+    FEEDBACK_URL  = if (exists("FEEDBACK_URL")) FEEDBACK_URL else "",
     YEAR          = format(Sys.Date(), "%Y")
   )
 }
@@ -107,6 +114,7 @@ footer_ui <- function() {
   repo_url <- if (exists("REPO_URL")) REPO_URL else "https://github.com/Zest-Data-Group/GAMMa"
   version  <- if (exists("APP_VERSION")) APP_VERSION else "dev"
   email    <- if (exists("CONTACT_EMAIL")) CONTACT_EMAIL else "hello@zestdg.com"
+  feedback <- if (exists("FEEDBACK_URL")) FEEDBACK_URL else NULL
   tags$footer(
     class = "footer-modern",
     div(
@@ -170,6 +178,10 @@ footer_ui <- function() {
             tags$li(
               tags$i(class = "bi bi-bug"),
               tags$a(href = paste0(repo_url, "/issues/new"), target = "_blank", " Report an Issue", class = "footer-link")
+            ),
+            if (!is.null(feedback)) tags$li(
+              tags$i(class = "bi bi-chat-left-text"),
+              tags$a(href = feedback, target = "_blank", rel = "noopener noreferrer", " Give Feedback", class = "footer-link")
             )
           )
         )

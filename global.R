@@ -47,6 +47,9 @@ APP_URL <- "https://atlantabg.shinyapps.io/GAMMA_dev/"
 # Change it here when the gamma@ alias exists.
 CONTACT_EMAIL <- "hello@zestdg.com"
 
+# Feedback form linked from the banner, the footer and the About page.
+FEEDBACK_URL <- "https://forms.gle/zCbpd2jkq8VbLN2h8"
+
 # Landing page copy lives in YAML so it can be edited without touching R.
 landing_text <- yaml::read_yaml("appData/landing_text.yml")
 

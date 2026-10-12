@@ -12,8 +12,9 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   (#65, #66).
 - Gap map: layer control open by default and larger (#69).
 - Version number flows into the About citation and the report filename (#71).
-- Status banner with contact address across every page; one `CONTACT_EMAIL`
-  constant feeds banner, footer and About page (#73).
+- Status banner with contact address and feedback-form link across every
+  page; `CONTACT_EMAIL` and `FEEDBACK_URL` constants feed banner, footer and
+  About page (#73).
 - About page restyled into sections with images, a contents list and buttons
   to the working pages (#67, #70).
 
