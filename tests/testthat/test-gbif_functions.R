@@ -81,6 +81,40 @@ test_that("iNaturalist, fossil and date filters work", {
   expect_equal(dated$steps$in_date_range, nrow(dated$data))
 })
 
+test_that("eventDate parsing tolerates GBIF's partial dates, times and ranges (#72)", {
+  expect_equal(
+    gbif_parse_date(c("2011-08-14", "2026-04-08T08:59:10", "2026-01-15T20:28",
+                      "2018-11-27/2018-11-30", "2023-07", "2018", "", NA, "garbage")),
+    as.Date(c("2011-08-14", "2026-04-08", "2026-01-15",
+              "2018-11-27", "2023-07-01", "2018-01-01", NA, NA, NA))
+  )
+  expect_equal(gbif_parse_date(character(0)), as.Date(character(0)))
+})
+
+test_that("a partial eventDate at the top of the pool does not break a date-filtered download (#72)", {
+  # The report that found this: Quercus alba, 200 records, date filter, exclude
+  # iNaturalist, require name match, spatially spread. The pool's first record
+  # happened to carry a year-only eventDate.
+  partial_pool <- pool
+  partial_pool$eventDate[1] <- "2018"
+  survivors <- gbif_apply_filters(pool, taxon_name = TAXON)$data$gbifID
+  kept_row <- which(pool$gbifID %in% survivors & pool$basisOfRecord != "LIVING_SPECIMEN")[1]
+  partial_pool$eventDate[kept_row] <- "2023-07"
+  range <- as.Date(c("2018-11-27", "2026-10-05"))
+
+  expect_no_error(res <- gbif_apply_filters(partial_pool, taxon_name = TAXON, date_range = range))
+  expect_false(partial_pool$gbifID[1] %in% res$data$gbifID)         # "2018" -> 2018-01-01, before the range
+  expect_true(partial_pool$gbifID[kept_row] %in% res$data$gbifID)   # "2023-07" -> 2023-07-01, inside it
+
+  expect_no_error(
+    out <- gbif_gather(attr(pool, "taxon_key"), limit = 200, exclude_inat = TRUE,
+                       date_range = range, method = "spatial", pool = partial_pool,
+                       taxon_name = TAXON)
+  )
+  expect_gt(nrow(out$data), 0)
+  expect_equal(out$mode, "advanced")
+})
+
 test_that("selection takes every living specimen first, then most recent references, up to the limit", {
   f <- gbif_apply_filters(pool)$data
   n_liv <- sum(f$basisOfRecord == "LIVING_SPECIMEN")
@@ -88,7 +122,9 @@ test_that("selection takes every living specimen first, then most recent referen
   expect_equal(nrow(sel), 50)
   expect_equal(sum(sel$basisOfRecord == "LIVING_SPECIMEN"), sum(f$basisOfRecord == "LIVING_SPECIMEN"))
   others <- sel[sel$basisOfRecord != "LIVING_SPECIMEN", ]
-  expect_equal(others$eventDate, sort(others$eventDate, decreasing = TRUE, na.last = TRUE))
+  d <- gbif_parse_date(others$eventDate)
+  expect_true(all(diff(as.numeric(d[!is.na(d)])) <= 0))          # non-increasing by day
+  expect_true(all(which(is.na(d)) > max(which(!is.na(d)))))        # undated records last
   expect_equal(nrow(gbif_select_records(f, limit = 0)), 0)
   expect_equal(nrow(gbif_select_records(f, limit = 1e6)), nrow(f))
   # default method keeps the pool's own order (what a standard download returns)

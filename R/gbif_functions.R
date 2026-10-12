@@ -100,6 +100,20 @@ gbif_pool_limits <- function(limit) {
   )
 }
 
+# GBIF's eventDate is an ISO 8601 string in several shapes: "2011-08-14",
+# "2026-04-08T08:59:10", a range "2018-11-27/2018-11-30", or a partial date
+# "2023-07" / "2018". Base as.Date() throws "character string is not in a
+# standard unambiguous format" when the first non-missing value is partial
+# (issue #72), which took down every date-filtered download for such a pool.
+# Resolve each value to the earliest day it can mean (a range to its start, a
+# partial date to the first day of its period); anything else is NA.
+gbif_parse_date <- function(x) {
+  s <- sub("[T /].*$", "", trimws(as.character(x)))
+  s <- ifelse(grepl("^[0-9]{4}$", s), paste0(s, "-01-01"),
+       ifelse(grepl("^[0-9]{4}-[0-9]{2}$", s), paste0(s, "-01"), s))
+  as.Date(s, format = "%Y-%m-%d")
+}
+
 # Reduce a raw occ_search() table to GBIF_RAW_FIELDS (adding any that are
 # missing) with a character gbifID.
 gbif_standardise <- function(pool) {
@@ -232,7 +246,7 @@ gbif_apply_filters <- function(df, include_synonyms = FALSE, exclude_inat = FALS
 
   if (!is.null(date_range) && length(date_range) == 2 && !any(is.na(date_range))) {
     start <- as.Date(date_range[1]); end <- as.Date(date_range[2])
-    parsed <- suppressWarnings(as.Date(df$eventDate))
+    parsed <- gbif_parse_date(df$eventDate)
     df <- df[!is.na(parsed) & parsed >= start & parsed <= end, , drop = FALSE]
     steps$in_date_range <- nrow(df)
   }
@@ -248,7 +262,7 @@ gbif_apply_filters <- function(df, include_synonyms = FALSE, exclude_inat = FALS
 # most-recent order.
 select_spatially_spread <- function(df, n) {
   if (nrow(df) <= n) return(df)
-  df <- dplyr::arrange(df, dplyr::desc(eventDate))
+  df <- dplyr::arrange(df, dplyr::desc(gbif_parse_date(eventDate)))
   lat <- as.numeric(df$decimalLatitude)
   lon <- as.numeric(df$decimalLongitude)
   x <- lon * cos(mean(lat, na.rm = TRUE) * pi / 180)
@@ -274,7 +288,8 @@ select_spatially_spread <- function(df, n) {
 
 # Pick at most `limit` records: every living specimen first (G), then reference
 # records (H) chosen by `method` - "gbif" (the order GBIF returned them, which
-# is what the standard download gives), "recent" (most recent eventDate first),
+# is what the standard download gives), "recent" (most recent eventDate first,
+# at day precision via gbif_parse_date(); undated records last),
 # "random", or "spatial" (see select_spatially_spread). When a date range was
 # applied, one record per year is taken first so the range is spread evenly.
 gbif_select_records <- function(df, limit, method = c("gbif", "recent", "random", "spatial"),
@@ -301,7 +316,7 @@ gbif_select_records <- function(df, limit, method = c("gbif", "recent", "random"
   } else if (method == "spatial") {
     picked <- select_spatially_spread(other, n = min(remaining, nrow(other)))
   } else if (method == "recent") {
-    picked <- other |> dplyr::arrange(dplyr::desc(eventDate)) |> dplyr::slice_head(n = min(remaining, nrow(other)))
+    picked <- other |> dplyr::arrange(dplyr::desc(gbif_parse_date(eventDate))) |> dplyr::slice_head(n = min(remaining, nrow(other)))
   } else {
     picked <- dplyr::slice_head(other, n = min(remaining, nrow(other)))
   }
