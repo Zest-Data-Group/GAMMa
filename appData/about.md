@@ -72,6 +72,13 @@ Using the input data, the gap analysis tool produces three *ex situ* conservatio
 ## Taxonomy
 To search and upload reference records from GBIF, the GAMMa tool uses the GBIF Backbone Taxonomy, which is assembled from 105 sources including The World Checklist of Vascular Plants (WCVP) and the International Plant Names Index. Click here to learn more about GBIF Backbone Taxonomy. Records are retrieved by the backbone taxon key and then checked against the scientific name GBIF interpreted for each record: by default only records whose interpreted name is the selected taxon (or, for a species, one of its subspecies or varieties) are kept, so records that GBIF's name matching re-assigned to a different taxon are not counted. This check can be switched off under *Advanced options*.
 
+## How the GBIF download works
+The sidebar's *Advanced options* fall into two groups. The **Download pool** options (a date filter, excluding iNaturalist, or a reference-selection method other than GBIF order) change how records are requested. With none of them set, the tool asks GBIF for exactly the number of records on the slider: every living specimen first, then reference records in GBIF's own order. With any of them set, it downloads a larger pool and filters and samples it in the tool, which takes longer. The **Name checks** (scientific name match, synonyms) are applied to the records in either case and do not change how the download is made.
+
+![Flowchart of the GBIF download: taxon selection, the standard or advanced download branch, filtering, selection of living then reference records, and the resulting working dataset](../www/gbif_pipeline.svg)
+
+*GBIF order* and *Most recent first* usually return a very similar set of reference records, because GBIF tends to return recently published records first, but they are not guaranteed to match and the most-recent option takes roughly twice as long. Use it when the collection date matters; use *Spatially spread* when the goal is to cover the taxon's range rather than its most densely sampled area.
+
 ## Data Use
 The Gap Analysis tool does not store any user-uploaded data. Analyses are performed in a single session, and will time out after one hour of non use. Sensitive information is therefore not retained—but users must also re-run analyses after the session times out.
 

@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 560" width="100%" style="max-width:860px;height:auto;display:block;margin:1rem auto" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13">
+  <title>How GAMMa downloads GBIF records</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#495057"/>
+    </marker>
+    <style>
+      .gp-box { fill:#f8f9fa; stroke:#495057; stroke-width:1.2; rx:6; }
+      .gp-std { fill:#e7f3ec; stroke:#2e7d4f; }
+      .gp-adv { fill:#fff4e5; stroke:#b26a00; }
+      .gp-dec { fill:#eef2ff; stroke:#3b4cca; }
+      .gp-out { fill:#e9ecef; stroke:#212529; stroke-width:1.6; }
+      .gp-t   { fill:#212529; }
+      .gp-h   { font-weight:600; }
+      .gp-s   { fill:#495057; font-size:12px; }
+      .gp-edge{ fill:none; stroke:#495057; stroke-width:1.4; marker-end:url(#arrow); }
+      .gp-lbl { fill:#495057; font-size:12px; font-style:italic; }
+    </style>
+  </defs>
+
+  <!-- 1. taxon -->
+  <rect class="gp-box" x="280" y="16" width="300" height="48"/>
+  <text class="gp-t gp-h" x="430" y="36" text-anchor="middle">Taxon selected in the sidebar</text>
+  <text class="gp-s" x="430" y="54" text-anchor="middle">resolved to a GBIF Backbone taxon key; slider sets the record count</text>
+
+  <!-- 2. decision -->
+  <polygon class="gp-dec" points="430,84 640,140 430,196 220,140"/>
+  <text class="gp-t gp-h" x="430" y="128" text-anchor="middle">Any “Download pool” option set?</text>
+  <text class="gp-s" x="430" y="146" text-anchor="middle">date filter · exclude iNaturalist ·</text>
+  <text class="gp-s" x="430" y="162" text-anchor="middle">reference selection other than GBIF order</text>
+
+  <!-- edges from decision -->
+  <path class="gp-edge" d="M220,140 L120,140 L120,232"/>
+  <text class="gp-lbl" x="128" y="158">No — standard</text>
+  <path class="gp-edge" d="M640,140 L740,140 L740,232"/>
+  <text class="gp-lbl" x="648" y="158">Yes — advanced</text>
+
+  <!-- 3a. standard -->
+  <rect class="gp-box gp-std" x="20" y="234" width="320" height="118"/>
+  <text class="gp-t gp-h" x="180" y="256" text-anchor="middle">Standard download (fastest)</text>
+  <text class="gp-s" x="32" y="278">1. All living specimens, up to the slider</text>
+  <text class="gp-s" x="32" y="296">2. Reference records for the shortfall, in GBIF’s order</text>
+  <text class="gp-s" x="32" y="314">Exactly the slider count is requested. Name checks run</text>
+  <text class="gp-s" x="32" y="332">on each page; rejected rows are replaced by paging on.</text>
+
+  <!-- 3b. advanced -->
+  <rect class="gp-box gp-adv" x="540" y="234" width="300" height="118"/>
+  <text class="gp-t gp-h" x="690" y="256" text-anchor="middle">Advanced download (slower)</text>
+  <text class="gp-s" x="552" y="278">1. Living specimens, up to 2× the slider</text>
+  <text class="gp-s" x="552" y="296">2. An unfiltered pool, up to 5× the slider</text>
+  <text class="gp-s" x="552" y="314">(each capped at 2,000; date filter applied by GBIF).</text>
+  <text class="gp-s" x="552" y="332">Oversampled so the filters below have candidates.</text>
+
+  <!-- edges into filters -->
+  <path class="gp-edge" d="M180,352 L180,392 L300,392"/>
+  <path class="gp-edge" d="M690,352 L690,392 L560,392"/>
+
+  <!-- 4. filters -->
+  <rect class="gp-box" x="300" y="372" width="260" height="70"/>
+  <text class="gp-t gp-h" x="430" y="392" text-anchor="middle">Filter the records</text>
+  <text class="gp-s" x="430" y="410" text-anchor="middle">de-duplicate · coordinates · scientific name match ·</text>
+  <text class="gp-s" x="430" y="426" text-anchor="middle">synonyms · iNaturalist · fossils · date range</text>
+
+  <path class="gp-edge" d="M430,442 L430,462"/>
+
+  <!-- 5. select -->
+  <rect class="gp-box" x="300" y="464" width="260" height="52"/>
+  <text class="gp-t gp-h" x="430" y="484" text-anchor="middle">Select up to the slider count</text>
+  <text class="gp-s" x="430" y="502" text-anchor="middle">every living specimen (G) first, then reference (H) by the chosen method</text>
+
+  <path class="gp-edge" d="M430,516 L430,534"/>
+
+  <!-- 6. output -->
+  <rect class="gp-box gp-out" x="330" y="536" width="200" height="20"/>
+  <text class="gp-t gp-h" x="430" y="550" text-anchor="middle" font-size="12">Working dataset (G / H)</text>
+
+  <!-- side note -->
+  <text class="gp-s" x="20" y="470">Name checks (scientific name match,</text>
+  <text class="gp-s" x="20" y="486">synonyms) apply in both branches and</text>
+  <text class="gp-s" x="20" y="502">never change which branch is taken.</text>
+</svg>

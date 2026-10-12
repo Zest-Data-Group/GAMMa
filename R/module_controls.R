@@ -1,3 +1,12 @@
+# Small info icon used in option labels, and a radio-choice label with its own
+# tooltip (#66). bslib::tooltip() needs a single tag to attach to.
+gbif_info_icon <- function() {
+  icon("circle-info", class = "ms-1 text-muted", style = "font-size: 0.85em;")
+}
+gbif_choice_label <- function(label, tip) {
+  bslib::tooltip(tags$span(label, gbif_info_icon()), tip)
+}
+
 # CONTROLS UI ----------------------------------------------------------------------
 controlsModuleUI <- function(id) {
   ns <- NS(id)
@@ -67,12 +76,20 @@ controlsModuleUI <- function(id) {
                 # Add tooltip and info icon to the accordion header
                 title = bslib::tooltip(
                   tags$span("Advanced options ", icon("circle-info", class = "ms-1 text-muted", style = "font-size: 0.85em;")),
-                  paste("With none of these set, the app asks GBIF for exactly the number of records on the slider",
-                        "(all living specimens first, then reference records in GBIF's order) - the fastest download.",
-                        "Setting a date filter, excluding iNaturalist, or choosing another reference selection",
-                        "switches to a larger download pool that is filtered and sampled in the app, which is slower.")
+                  paste("Two kinds of option. The 'Download pool' options change how records are requested:",
+                        "with none set, the app asks GBIF for exactly the number on the slider (living specimens first,",
+                        "then reference records in GBIF's order), the fastest download. A date filter, excluding iNaturalist,",
+                        "or a selection method other than GBIF order downloads a larger pool that is filtered and sampled",
+                        "in the app, which is slower. The 'Name checks' apply to the records in either case and do not",
+                        "change how the download is made.")
                 ),
                 value = "panel_gbif_advanced",
+
+                # Options that change HOW the download is made. Any of these
+                # switches from the exact (standard) download to the oversampled
+                # pool that is filtered and sampled in the app; see
+                # gbif_is_standard_request() in R/gbif_functions.R (#65).
+                tags$div(class = "gbif-option-group", "Download pool"),
 
                 bslib::tooltip(
                   checkboxInput(
@@ -80,7 +97,7 @@ controlsModuleUI <- function(id) {
                     "Apply date filter",
                     value = FALSE
                   ),
-                  "Select or enter a specific date range of interest."
+                  "Keep only records whose event date falls in the range. Uses the larger download pool."
                 ),
 
                 conditionalPanel(
@@ -100,8 +117,50 @@ controlsModuleUI <- function(id) {
                     "Exclude iNaturalist records",
                     value = FALSE
                   ),
-                  "Removes all records originally collected through iNaturalist."
+                  "Removes all records originally collected through iNaturalist. Uses the larger download pool."
                 ),
+
+                # One tooltip per choice (#66). Living specimens (G) are always
+                # taken first whatever the method; it only decides the H records.
+                radioButtons(
+                  ns("reference_selection"),
+                  label = bslib::tooltip(
+                    tags$span("Reference record selection", gbif_info_icon()),
+                    paste("How reference (H) records are chosen. Living specimens (G) are always taken first,",
+                          "up to the slider. Any choice other than GBIF order uses the larger download pool.")
+                  ),
+                  choiceNames = list(
+                    gbif_choice_label(
+                      "GBIF order (fastest)",
+                      paste("Requests only the records needed and keeps them in the order GBIF returns them.",
+                            "That order is GBIF's own and is not sorted by date, although for many taxa it is",
+                            "close to most-recent-first.")
+                    ),
+                    gbif_choice_label(
+                      "Most recent first",
+                      paste("Downloads the larger pool, then keeps the reference records with the latest event",
+                            "dates (day precision; undated records last). Usually overlaps heavily with GBIF order",
+                            "but is not identical, and takes about twice as long.")
+                    ),
+                    gbif_choice_label(
+                      "Random",
+                      "Downloads the larger pool and takes a random sample of the reference records. Differs on every run."
+                    ),
+                    gbif_choice_label(
+                      "Spatially spread",
+                      paste("Downloads the larger pool, then picks reference records as far apart from each other",
+                            "as possible, starting from the most recent, so the set covers the taxon's range",
+                            "rather than its best-sampled corner.")
+                    )
+                  ),
+                  choiceValues = c("gbif", "recent", "random", "spatial"),
+                  selected = "gbif"
+                ),
+
+                # Checks applied to the downloaded records in EITHER mode. They do
+                # not change the download; in standard mode rejected rows are
+                # replaced by paging further (#65).
+                tags$div(class = "gbif-option-group", "Name checks (either download)"),
 
                 bslib::tooltip(
                   checkboxInput(
@@ -109,7 +168,7 @@ controlsModuleUI <- function(id) {
                     "Require scientific name match",
                     value = TRUE
                   ),
-                  "Keep only records whose GBIF-interpreted scientific name is the selected taxon (a species selection also accepts its subspecies and varieties). GBIF's backbone matching can assign a record to a different name than the one on the label; this check drops those records instead of counting them."
+                  "Keep only records whose GBIF-interpreted scientific name is the selected taxon (a species selection also accepts its subspecies and varieties). GBIF's backbone matching can assign a record to a different name than the one on the label; this check drops those records instead of counting them. Does not change how the download is made."
                 ),
 
                 bslib::tooltip(
@@ -118,22 +177,7 @@ controlsModuleUI <- function(id) {
                     "Include taxonomic synonyms",
                     value = FALSE # FALSE means synonyms are excluded by default
                   ),
-                  "Toggle to bring \"accepted synonyms\" back into the pull. When unchecked (default), synonyms are removed and you may need to adjust the download size to get the correct number of features."
-                ),
-
-                bslib::tooltip(
-                  radioButtons(
-                    ns("reference_selection"),
-                    "Reference record selection",
-                    choices = c(
-                      "GBIF order (fastest)" = "gbif",
-                      "Most recent first" = "recent",
-                      "Random" = "random",
-                      "Spatially spread" = "spatial"
-                    ),
-                    selected = "gbif"
-                  ),
-                  "How reference (H) records are chosen. Living specimens (G) are always taken first. \"GBIF order\" requests only the records needed and takes them as GBIF returns them. The other methods download a larger pool first and then pick the most recent records, a random sample, or records spread across the taxon's range."
+                  "Toggle to bring \"accepted synonyms\" back into the pull. When unchecked (default), synonyms are removed and you may need to adjust the download size to get the correct number of features. Does not change how the download is made."
                 )
               )
             )
