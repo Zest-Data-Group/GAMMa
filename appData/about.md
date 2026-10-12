@@ -17,7 +17,7 @@ Use this tool to:
 ### What does the tool do?
 It compares accession-level data of an *ex situ* collection for a single taxon to wild or native occurrence records of that taxon. The tool calculates the degree of representation, or overlapping area, of the existing *ex situ* accession(s) in comparison to the taxon’s wild or native distribution. A report is generated which provides a map of the representation as well as the coverage calculations.
 
-[Click here for a step-by-step tutorial.](#)
+A step-by-step tutorial is in development and will be linked here when available. In the meantime, questions about using the tool can be sent to [hello@zestdg.com](mailto:hello@zestdg.com).
 
 ### What is conservation gap analysis?
 Conservation gap analysis is a method of assessing the degree of representation of species in conservation systems, in this case using spatial approaches. *Ex situ* conservation gap analysis analyzes the extent to which *ex situ* conservation collections (i.e. mature plant, seed, etc., collections in botanic gardens, genebanks, and other repositories) are conserving the full range of diversity of a taxon. 
