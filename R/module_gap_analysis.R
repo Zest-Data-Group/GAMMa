@@ -312,7 +312,8 @@ gapAnalysisServer <- function(id, analysis_data, active = shiny::reactive(TRUE))
       filename = function() {
         res <- gap_result()
         taxon <- if (!is.null(res)) res$taxon else "Taxon"
-        paste0(gsub("[^A-Za-z0-9_]+", "_", taxon), "_gap_analysis_", Sys.Date(), ".html")
+        version <- if (exists("APP_VERSION")) APP_VERSION else "dev"
+        paste0(gsub("[^A-Za-z0-9_]+", "_", taxon), "_gap_analysis_", Sys.Date(), "_v", version, ".html")
       },
       content = function(file) {
         res <- gap_result()

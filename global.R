@@ -36,8 +36,16 @@ options(shiny.autoreload = FALSE)
 # "Read Documentation") are built from this. Points at the Zest Data Group GitHub organization.
 REPO_URL <- "https://github.com/Zest-Data-Group/GAMMa"
 
-# App version, shown in the footer. Bump VERSION when releasing.
+# App version, shown in the footer, the About-page citation and the report
+# filename. Bump VERSION when releasing (#71).
 APP_VERSION <- if (file.exists("VERSION")) trimws(readLines("VERSION", n = 1, warn = FALSE)) else "dev"
+
+# Public endpoint cited on the About page. Update when the app moves hosts (#12).
+APP_URL <- "https://atlantabg.shinyapps.io/GAMMA_dev/"
+
+# Single contact address used by the banner, the footer and the About page (#73).
+# Change it here when the gamma@ alias exists.
+CONTACT_EMAIL <- "hello@zestdg.com"
 
 # Landing page copy lives in YAML so it can be edited without touching R.
 landing_text <- yaml::read_yaml("appData/landing_text.yml")

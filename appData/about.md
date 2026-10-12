@@ -13,11 +13,13 @@ Use this tool to:
 * Identify geographic and ecological gaps in the *ex situ* collection or metacollection
 
 ## GAMMa General Information
+<img src="cycad.jpg" class="about-figure" alt="Cycad in a botanic garden collection">
+
 
 ### What does the tool do?
 It compares accession-level data of an *ex situ* collection for a single taxon to wild or native occurrence records of that taxon. The tool calculates the degree of representation, or overlapping area, of the existing *ex situ* accession(s) in comparison to the taxon’s wild or native distribution. A report is generated which provides a map of the representation as well as the coverage calculations.
 
-A step-by-step tutorial is in development and will be linked here when available. In the meantime, questions about using the tool can be sent to [hello@zestdg.com](mailto:hello@zestdg.com).
+A step-by-step tutorial is in development and will be linked here when available. In the meantime, questions about using the tool can be sent to [{{CONTACT_EMAIL}}](mailto:{{CONTACT_EMAIL}}).
 
 ### What is conservation gap analysis?
 Conservation gap analysis is a method of assessing the degree of representation of species in conservation systems, in this case using spatial approaches. *Ex situ* conservation gap analysis analyzes the extent to which *ex situ* conservation collections (i.e. mature plant, seed, etc., collections in botanic gardens, genebanks, and other repositories) are conserving the full range of diversity of a taxon. 
@@ -41,6 +43,8 @@ The tool compares *ex situ* accession-level data with wild or native occurrence 
 [Introduction/Explainer/Overview Video]
 
 ## In-tool Terms and Metrics
+<img src="gather_photo.jpg" class="about-figure" alt="Collecting field data">
+
 
 ### Input data types (GBIF and Custom Data uploads)
 * **(G) Germplasm records:** Wild collection data (i.e. accession data) associated with living samples (e.g., entire plants or seeds) in an *ex situ* repository (i.e., botanical garden, genebank, etc.). These are provided by the user and/or are flagged in the GBIF dataset which filters the “Basis of Record” field and assigns “living specimen” records as G.
@@ -75,7 +79,7 @@ To search and upload reference records from GBIF, the GAMMa tool uses the GBIF B
 ## How the GBIF download works
 The sidebar's *Advanced options* fall into two groups. The **Download pool** options (a date filter, excluding iNaturalist, or a reference-selection method other than GBIF order) change how records are requested. With none of them set, the tool asks GBIF for exactly the number of records on the slider: every living specimen first, then reference records in GBIF's own order. With any of them set, it downloads a larger pool and filters and samples it in the tool, which takes longer. The **Name checks** (scientific name match, synonyms) are applied to the records in either case and do not change how the download is made.
 
-![Flowchart of the GBIF download: taxon selection, the standard or advanced download branch, filtering, selection of living then reference records, and the resulting working dataset](../www/gbif_pipeline.svg)
+![Flowchart of the GBIF download: taxon selection, the standard or advanced download branch, filtering, selection of living then reference records, and the resulting working dataset](www/gbif_pipeline.svg)
 
 *GBIF order* and *Most recent first* usually return a very similar set of reference records, because GBIF tends to return recently published records first, but they are not guaranteed to match and the most-recent option takes roughly twice as long. Use it when the collection date matters; use *Spatially spread* when the goal is to cover the taxon's range rather than its most densely sampled area.
 
@@ -84,9 +88,11 @@ The Gap Analysis tool does not store any user-uploaded data. Analyses are perfor
 
 ## Citing this Tool
 Please cite as:
-Carver, D., Byrne, A., Coffey, E.E.D., Good, K., Handley, V., Khoury, C.K., Linsky, J., Norris, S., Phipps, S., Toppila, R. (2026). Gap Analysis And Metacollection Management Tool (GAMMa). [Computer Software] Atlanta Botanical Garden. https://atlantabg.shinyapps.io/GAMMA_dev/ (Version BETA). Accessed on DD/MM/YYYY.
+Carver, D., Byrne, A., Coffey, E.E.D., Good, K., Handley, V., Khoury, C.K., Linsky, J., Norris, S., Phipps, S., Toppila, R. ({{YEAR}}). Gap Analysis And Metacollection Management Tool (GAMMa), version {{APP_VERSION}}. [Computer Software] Atlanta Botanical Garden. {{APP_URL}} Accessed on DD/MM/YYYY.
 
 ## Project Background
+<img src="seedling.jpg" class="about-figure" alt="Seedling">
+
 Botanic gardens, genebanks, and other *ex situ* repositories play a vital role in biodiversity conservation, ecological restoration, research, education, and outreach. Staff at these institutions are increasingly working to understand and expand the conservation and use value of collections through assessment and curation while also widening the impact of those collections through collaboration with other organizations. Metacollections - combined holdings of species across multiple institutions, managed collaboratively for conservation and research - are arising as a key tool to address challenges in *ex situ* plant conservation, including a lack of coordination among institutions, redundancy and gaps in geographic and ecological coverage, uneven taxonomic representation, loss of wild-origin data and genetic lineages, and limited long-term institutional capacity.
 
 In order to establish and expand metacollections of high conservation and use value, an understanding of both the status of and gaps within the collection are needed. *Ex situ* conservation gap analysis can provide this information through compilation and ecogeographical analysis of accession data. Workflows to gather, analyze, and present conservation gap analyses which inform collection development have been created over recent decades, including for example by Ramírez-Villegas et al. (2010), Castañeda-Álvarez et al. (2016), Khoury et al. (2019), Khoury et al. (2020) and Carver et al. (2021), and have been implemented for wild relatives of crops and useful wild plants more widely. 
@@ -109,7 +115,7 @@ The Gap Analysis and Metacollection Management tool was developed by a core proj
 * [New York Botanical Garden](https://www.nybg.org/)
 * [Zest Data Group](https://zestdg.com)
 
-Questions about the application or its code base can be sent to [Zest Data Group](https://zestdg.com) at [hello@zestdg.com](mailto:hello@zestdg.com).
+Questions about the application or its code base can be sent to [Zest Data Group](https://zestdg.com) at [{{CONTACT_EMAIL}}](mailto:{{CONTACT_EMAIL}}).
 
 ## References & Relevant reading
 * Beckman, E., Meyer, A., Denvir, A., Gill, D., Man, G., Pivorunas, D., Shaw, K., & Westwood, M. (2019). Conservation Gap Analysis of Native U.S. Oaks. Lisle, IL: The Morton Arboretum.

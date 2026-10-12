@@ -3,6 +3,8 @@ landingUI <- function(id, landing_text) {
   
   div(
     class = "landing-page",
+    # Status banner (#73); the landing overlay hides the navbar header's copy
+    app_banner_ui(),
     # --- HERO SECTION ---
     div(
       class = "hero-section",

@@ -10,9 +10,13 @@ ui <- tagList(
     id = "navbar",
     theme = bs_theme(version = 5),
     # LINKING THE CSS FILE HERE
-    header = tags$head(
-      tags$link(rel = "stylesheet", type = "text/css",
-                href = paste0("custom.css?v=", as.integer(file.mtime("www/custom.css")))),
+    header = tagList(
+      tags$head(
+        tags$link(rel = "stylesheet", type = "text/css",
+                  href = paste0("custom.css?v=", as.integer(file.mtime("www/custom.css"))))
+      ),
+      # Status banner above every page (#73); copy in appData/landing_text.yml
+      app_banner_ui()
     ),
     nav_spacer(),
     # Navigation pages
@@ -66,7 +70,11 @@ server <- function(input, output, session) {
   dataAnalysisServer("data_analysis", analysis_data, selected_points)
   gapAnalysisServer("gap_analysis", analysis_data,
                     active = reactive(identical(input$navbar, "gap")))
-  aboutServer("about")
+  # About page navigation buttons (#70)
+  about_actions <- aboutServer("about")
+  observeEvent(about_actions$go_data(), updateNavbarPage(session, "navbar", selected = "data"))
+  observeEvent(about_actions$go_gap(),  updateNavbarPage(session, "navbar", selected = "gap"))
+  observeEvent(about_actions$go_home(), updateNavbarPage(session, "navbar", selected = "home"))
 }
 
 # Run the application

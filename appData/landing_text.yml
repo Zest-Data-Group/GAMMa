@@ -18,3 +18,9 @@ share:
   title: "Share the results"
   text: "Download a self-contained HTML report of the scores, maps and records to share with partners."
 
+# Status banner shown across the top of every page (#73). Set show: false to
+# hide it. The contact address comes from CONTACT_EMAIL in global.R.
+banner:
+  show: true
+  text: "GAMMa is in beta. Scores, options and the report layout may still change before the full release."
+  contact_label: "Questions or problems?"

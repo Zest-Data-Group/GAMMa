@@ -428,7 +428,9 @@ gap_base_map <- function() {
         "ERS Regions",   # <- MUST BE LISTED HERE
         PROTECTED_LAND_GROUP
       ),
-      options = leaflet::layersControlOptions(collapsed = TRUE)
+      # Open by default so the overlays (protected areas in particular) are
+      # discoverable; the data map keeps the compact control (#69).
+      options = leaflet::layersControlOptions(collapsed = FALSE)
     ) %>%
     # Optional: Hide them on initial load so the map isn't cluttered
     leaflet::hideGroup(c("Range (convex hull)", "GRS Gap", "ERS Regions", "Buffers", PROTECTED_LAND_GROUP))
