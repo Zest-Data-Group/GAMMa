@@ -2,16 +2,22 @@
 # 2026 refactor (buffer clipped to appData/land_simple.gpkg, ecoregions from
 # appData/ecoregionsSimplified.gpkg). Any change to these numbers is a behaviour
 # change in SRSex/GRSex/ERSex or the buffering pipeline and must be deliberate.
+#
+# Goldens last verified against GEOS 3.12.1, GDAL 3.8.4, PROJ 9.4.0, terra 1.9.50
+# (2026-10-22). SRS and ERS are exact arithmetic on counts and keep tolerance 1e-6.
+# GRS is a geodesic area after a GEOS union and reproduces only to ~1e-5 across
+# geometry-library stacks (renv.lock does not pin GEOS/GDAL/PROJ), so its
+# tolerance is 1e-4; a real GRS regression is orders of magnitude larger.
 
 use_app_root()
 
 gap_cases <- list(
-  list(file = "Magnolia_acuminata_data_small.csv", km = 10, srs = 100.000000, grs = 58.844268, ers = 50.000000, n_eco = 8, n_buffers = 8),
-  list(file = "Magnolia_acuminata_data_small.csv", km = 50, srs = 100.000000, grs = 61.924207, ers = 50.000000, n_eco = 8, n_buffers = 11),
-  list(file = "Magnolia_acuminata_data.csv", km = 10, srs = 12.359551, grs = 9.826068, ers = 33.330000, n_eco = 159, n_buffers = 200),
-  list(file = "Magnolia_acuminata_data.csv", km = 50, srs = 12.359551, grs = 14.550262, ers = 50.000000, n_eco = 159, n_buffers = 207),
-  list(file = "upload_sample.csv", km = 10, srs = 2.564103, grs = 6.163115, ers = 30.000000, n_eco = 19, n_buffers = 200),
-  list(file = "upload_sample.csv", km = 50, srs = 2.564103, grs = 11.467496, ers = 30.000000, n_eco = 19, n_buffers = 200)
+  list(file = "Magnolia_acuminata_data_small.csv", km = 10, srs = 100.000000, grs = 58.844268, ers = 50.000000, n_eco = 8),
+  list(file = "Magnolia_acuminata_data_small.csv", km = 50, srs = 100.000000, grs = 61.924207, ers = 50.000000, n_eco = 8),
+  list(file = "Magnolia_acuminata_data.csv", km = 10, srs = 12.359551, grs = 9.826068, ers = 33.330000, n_eco = 159),
+  list(file = "Magnolia_acuminata_data.csv", km = 50, srs = 12.359551, grs = 14.550262, ers = 50.000000, n_eco = 159),
+  list(file = "upload_sample.csv", km = 10, srs = 2.564103, grs = 6.163115, ers = 30.000000, n_eco = 19),
+  list(file = "upload_sample.csv", km = 50, srs = 2.564103, grs = 11.467496, ers = 30.000000, n_eco = 19)
 )
 
 for (case in gap_cases) {
@@ -19,7 +25,7 @@ for (case in gap_cases) {
     d <- load_fixture_dataset(case$file)
     r <- run_gap_pipeline_reference(d, case$km)
     expect_equal(r$srs, case$srs, tolerance = 1e-6)
-    expect_equal(r$grs, case$grs, tolerance = 1e-6)
+    expect_equal(r$grs, case$grs, tolerance = 1e-4)
     expect_equal(r$ers, case$ers, tolerance = 1e-6)
     expect_equal(r$n_eco, case$n_eco)
   })
@@ -127,7 +133,7 @@ test_that("convex hull method estimates the range as a hull and clips G buffers 
   expect_equal(hull$method, "hull"); expect_equal(buf$method, "buffer")
   expect_null(buf$sf_model)
   expect_s3_class(hull$sf_model, "sf")
-  hull_area <- as.numeric(sum(sf::st_area(hull$sf_model))) / 1e6
+  hull_area <- sum(terra::expanse(terra::vect(hull$sf_model), unit = "km"))
   expect_gt(hull_area, buf$grs$`Area of model km2`)                 # hull fills the space between records
   expect_equal(hull$grs$`Area of model km2`, hull_area, tolerance = 1e-3)
   expect_true(all(hull$sf_buffers$processing_type == "G"))          # only G buffers drawn in hull mode
@@ -150,5 +156,132 @@ test_that("convex hull method refuses degenerate inputs with a clear message", {
   expect_error(run_gap_analysis(collinear, 50, method = "hull", land = L$land, ecoRegions = L$eco), "collinear")
   ocean <- d[1:3, ]; ocean$Longitude <- c(-40, -41, -40); ocean$Latitude <- c(30, 30, 31)
   expect_error(run_gap_analysis(ocean, 50, method = "hull", land = L$land, ecoRegions = L$eco), "land")
+})
+
+# T-01 (audit C-2): the pipeline only ever sees G/H rows. A row typed anything
+# else must not change the range model, GRS, ERS or the priority.
+test_that("run_gap_analysis ignores rows whose germplasm type is not G or H", {
+  d <- load_fixture_dataset("Magnolia_acuminata_data_small.csv")
+  L <- gap_layers()
+  base <- run_gap_analysis(d, 50, land = L$land, ecoRegions = L$eco)
+
+  # a far-away coordinate row with no usable type: if it were buffered it would
+  # add area to the model and a new ecoregion to the ERS universe
+  extra <- d[1:2, ]
+  extra$`Current Germplasm Type` <- "X"
+  extra$Latitude <- c(30.3, 30.4); extra$Longitude <- c(-97.7, -97.8)   # Austin TX, outside every fixture buffer
+  mixed <- merge_and_index(d, extra)
+  expect_equal(nrow(mixed), 10)
+  r <- run_gap_analysis(mixed, 50, land = L$land, ecoRegions = L$eco)
+
+  expect_equal(r$grs$`GRS exsitu`, base$grs$`GRS exsitu`, tolerance = 1e-6)
+  expect_equal(r$grs$`Area of model km2`, base$grs$`Area of model km2`, tolerance = 1e-6)
+  expect_equal(r$ers$summary, base$ers$summary, tolerance = 1e-6)
+  expect_equal(r$priority$code, base$priority$code)
+  expect_equal(nrow(r$points), 8)
+  expect_true(all(r$sf_buffers$processing_type %in% c("G", "H")))
+  # SRS, the taxon label and the returned records never see the dropped rows
+  expect_equal(r$srs$`Total records`, 8)
+  expect_equal(r$srs, base$srs)
+  expect_equal(nrow(r$records), 8)
+  expect_true(all(r$records$`Current Germplasm Type` %in% c("G", "H")))
+
+  all_x <- d; all_x$`Current Germplasm Type` <- "X"
+  expect_error(run_gap_analysis(all_x, 50, land = L$land, ecoRegions = L$eco), "No G or H")
+  no_coords <- d; no_coords$Latitude <- NA_real_
+  expect_error(run_gap_analysis(no_coords, 50, land = L$land, ecoRegions = L$eco), "valid coordinates")
+})
+
+# T-03 (audit C-1): the hull is built on longitudes unwrapped around the
+# largest empty gap between records, so it never spans the Pacific the wrong
+# way round. Fixtures reuse the small Magnolia rows with coordinates and types
+# overwritten so the frame keeps the canonical schema.
+hull_fixture <- function(lon, lat, type) {
+  d <- load_fixture_dataset("Magnolia_acuminata_data_small.csv")[seq_along(lon), ]
+  d$Longitude <- lon; d$Latitude <- lat; d$`Current Germplasm Type` <- type
+  d
+}
+vertex_lon <- function(sf_model) sf::st_coordinates(sf_model)[, "X"]
+
+fiji_lon <- c(179.9, -179.9, 178.5, 177.5); fiji_lat <- c(-16.8, -17.5, -16.5, -18.1)
+wrap_lon <- function(lon) ((lon + 180) %% 360) - 180
+
+test_that("convex hull range works for records straddling the antimeridian (Fiji)", {
+  L <- gap_layers()
+  fiji <- hull_fixture(fiji_lon, fiji_lat, c("G", "H", "H", "H"))
+  # The hull step itself is silent. ERSex still warns "[intersect] no
+  # intersection" on this fixture under BOTH methods (the G buffer touches an
+  # ecoregion that holds no record, so the conserved-ecoregion intersect is
+  # empty); that is ERSex behaviour, out of scope here, so the pipeline check
+  # is that the hull run adds no warning beyond the buffer run's.
+  v <- terra::vect(prep_lat_lon(fiji), geom = c("Longitude", "Latitude"), crs = "EPSG:4326")
+  expect_no_warning(convex_hull_range(v, terra::project(L$land, "EPSG:4326")))
+  hull_warnings <- capture_warnings(r <- run_gap_analysis(fiji, 25, method = "hull", land = L$land, ecoRegions = L$eco))
+  buffer_warnings <- capture_warnings(run_gap_analysis(fiji, 25, method = "buffer", land = L$land, ecoRegions = L$eco))
+  expect_equal(hull_warnings, buffer_warnings)
+  expect_gt(r$grs$`Area of model km2`, 5000)
+  expect_lt(r$grs$`Area of model km2`, 12000)
+  expect_gt(r$grs$`G buffer areas in model km2`, 0)
+  expect_gt(r$grs$`GRS exsitu`, 0)
+  # no piece of the range reaches into the central Pacific
+  expect_false(any(vertex_lon(r$sf_model) > -170 & vertex_lon(r$sf_model) < 170))
+})
+
+test_that("convex hull range spans the Pacific, not the Atlantic, for a two-hemisphere species", {
+  L <- gap_layers()
+  two <- hull_fixture(c(-84, -80, -75, 138, 140, 142), c(35, 40, 38, 35, 37, 40), c("G", "H", "G", "H", "G", "H"))
+  r <- run_gap_analysis(two, 50, method = "hull", land = L$land, ecoRegions = L$eco)
+  expect_false(any(vertex_lon(r$sf_model) > -60 & vertex_lon(r$sf_model) < 120))
+  expect_true(is.finite(r$grs$`Area of model km2`))
+  expect_gt(r$grs$`Area of model km2`, 1e6)
+})
+
+test_that("antimeridian_seam is the midpoint of the largest gap, normalised into (-180, 180]", {
+  expect_equal(antimeridian_seam(0), 180)                                   # one longitude: its antipode
+  expect_equal(antimeridian_seam(90), -90)
+  expect_equal(antimeridian_seam(c(-45, -46, -44, -45.5)), 135, tolerance = 1e-9)
+  expect_equal(antimeridian_seam(fiji_lon), -1.2, tolerance = 1e-9)
+  set.seed(42)
+  for (i in seq_len(30)) {
+    s <- antimeridian_seam(runif(sample(1:8, 1), -180, 180))
+    expect_gt(s, -180); expect_lte(s, 180)
+  }
+  expect_gt(antimeridian_seam(c(-180, 180)), -180)
+})
+
+test_that("unwrap_lon keeps an all-Eastern-hemisphere set inside -180..180 (no rotation needed)", {
+  europe_lon <- c(10, 15, 20, 12)
+  u <- unwrap_lon(europe_lon, antimeridian_seam(europe_lon))
+  expect_true(all(u >= -180 & u <= 180))
+  expect_equal(u, europe_lon)
+  expect_equal(unwrap_lon(c(140, 150, 160), antimeridian_seam(c(140, 150, 160))), c(140, 150, 160))
+
+  L <- gap_layers()
+  europe <- hull_fixture(europe_lon, c(45, 50, 48, 52), c("G", "H", "H", "H"))
+  r <- run_gap_analysis(europe, 25, method = "hull", land = L$land, ecoRegions = L$eco)
+  bb <- sf::st_bbox(r$sf_model)
+  expect_gte(bb[["xmin"]], 9); expect_lte(bb[["xmax"]], 21)
+  expect_gt(r$grs$`Area of model km2`, 0)
+})
+
+test_that("antimeridian_seam and unwrap_lon are invariant to a longitude shift", {
+  expect_equal(unwrap_lon(fiji_lon, -1.2), c(-180.1, -179.9, -181.5, -182.5), tolerance = 1e-9)
+
+  lon <- c(-84, -80, -75, 138, 140, 142); lat <- c(35, 40, 38, 35, 37, 40)
+  hull_expanse <- function(lon) {
+    u <- unwrap_lon(lon, antimeridian_seam(lon))
+    terra::expanse(terra::convHull(terra::vect(cbind(u, lat), crs = "EPSG:4326")), unit = "km")
+  }
+  # geodesic area is invariant to a longitude shift, so any difference means
+  # the unwrap chose a different arc around the globe
+  expect_equal(hull_expanse(lon), hull_expanse(wrap_lon(lon + 100)), tolerance = 1e-6)
+})
+
+test_that("convex hull range away from the antimeridian is unchanged (Fiji shape in Brazil)", {
+  L <- gap_layers()
+  brazil <- hull_fixture(wrap_lon(fiji_lon - 225), fiji_lat, c("G", "H", "H", "H"))
+  expect_equal(antimeridian_seam(brazil$Longitude), 133.8, tolerance = 1e-9)
+  r <- run_gap_analysis(brazil, 25, method = "hull", land = L$land, ecoRegions = L$eco)
+  expect_equal(r$grs$`Area of model km2`, 26409, tolerance = 0.01)   # audit C-1 control value
 })
 

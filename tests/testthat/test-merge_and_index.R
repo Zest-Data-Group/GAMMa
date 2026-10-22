@@ -35,14 +35,14 @@ test_that("merging appends rows and re-indexes from 1..n", {
   expect_equal(sum(out$source == "GBIF"), nrow(b))
 })
 
-test_that("rows with a germplasm type other than G/H are kept but counted", {
+# T-01: germplasm type is policed at upload by read_upload_file(), not here.
+# merge_and_index() only normalises the column (trim + upper case).
+test_that("merge_and_index normalises germplasm type and no longer flags it", {
   new <- data.frame(
-    `Accession Number` = c("a", "b", "c"), `Taxon Name` = "Q",
-    `Current Germplasm Type` = c("G", "seed", NA), Latitude = 1, Longitude = 1, check.names = FALSE
+    `Accession Number` = c("a", "b"), `Taxon Name` = "Q",
+    `Current Germplasm Type` = c(" g ", "h"), Latitude = 1, Longitude = 1, check.names = FALSE
   )
   out <- merge_and_index(data.frame(), new)
-  expect_equal(nrow(out), 3)
-  expect_equal(attr(out, "invalid_germplasm"), 2)
-  clean <- merge_and_index(data.frame(), new[1, ])
-  expect_equal(attr(clean, "invalid_germplasm"), 0)
+  expect_equal(out$`Current Germplasm Type`, c("G", "H"))
+  expect_null(attr(out, "invalid_germplasm"))
 })

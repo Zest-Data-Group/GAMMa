@@ -309,21 +309,67 @@ ERSex <- function(gapPoints, g_buffer, ecoRegions = gap_ecoregions()) {
 
 
 # --- Range model: convex hull ----------------------------------------------------
+# Wrap longitudes into (-180, 180].
+wrap_lon_180 <- function(lon) {
+  lon <- lon %% 360
+  ifelse(lon > 180, lon - 360, lon)
+}
+
+# Midpoint of the largest empty longitudinal gap between records, in (-180, 180].
+# A hull built on longitudes unwrapped around this seam never crosses the gap,
+# so it wraps the way that avoids the largest ocean, whichever that is. A single
+# longitude has no gap: its antipode is the seam.
+antimeridian_seam <- function(lon) {
+  s <- sort(unique(lon))
+  if (length(s) == 1) return(wrap_lon_180(s + 180))
+  gaps <- diff(c(s, s[1] + 360))
+  i <- which.max(gaps)
+  wrap_lon_180(s[i] + gaps[i] / 2)
+}
+
+# Place every longitude in the window (seam - 360, seam]. When every record
+# then sits at or beyond -180 the whole set is east of the seam with nothing
+# on the other side, so it is shifted back by 360: the result stays inside
+# -180..180 and only reaches below -180 when records really lie on both sides
+# of the antimeridian.
+unwrap_lon <- function(lon, seam) {
+  u <- ifelse(lon > seam, lon - 360, lon)
+  if (max(u) <= -180) u <- u + 360
+  u
+}
+
 # Convex hull around every record with coordinates, clipped to land. Needs at
 # least three distinct, non-collinear locations to enclose an area.
+#
+# The hull is planar in lon/lat (T-03, audit C-1). Longitudes are unwrapped
+# around the seam first, so records straddling 180 degrees, or spread over
+# both hemispheres, hull across the narrower gap instead of the wrong way
+# round the globe. When the unwrapped hull reaches past -180 the land is
+# re-wrapped at the seam before clipping and the result rotated back to
+# -180..180, where it may be a multipolygon split at the antimeridian.
 convex_hull_range <- function(v, land_proj) {
   coords <- unique(terra::crds(v))
   if (nrow(coords) < 3) {
     stop("The convex hull method needs at least 3 records at distinct locations; use the buffer method instead.")
   }
-  hull <- terra::convHull(v)
+  seam  <- antimeridian_seam(coords[, 1])
+  lon_u <- unwrap_lon(coords[, 1], seam)
+  v_u   <- terra::vect(cbind(lon_u, coords[, 2]), crs = "EPSG:4326")
+  hull  <- terra::convHull(v_u)
   if (terra::geomtype(hull) != "polygons" || terra::expanse(hull, unit = "km") <= 0) {
     stop("The records are collinear, so a convex hull has no area; use the buffer method instead.")
   }
   hull$processing_type <- "range"
-  clipped <- terra::intersect(hull, land_proj)
+  crosses <- min(lon_u) < -180
+  land_u  <- if (crosses) terra::rotate(land_proj, longitude = seam, split = TRUE, left = TRUE) else land_proj
+  clipped <- terra::intersect(hull, land_u)
   if (length(clipped) == 0) stop("The convex hull does not overlap any land area.")
-  terra::aggregate(clipped)
+  out <- terra::aggregate(clipped)
+  if (crosses) {
+    out <- terra::rotate(out, longitude = -180, split = TRUE, left = FALSE)
+    if (!identical(terra::crs(out), terra::crs(v))) terra::crs(out) <- terra::crs(v)
+  }
+  out
 }
 
 # --- Whole pipeline ------------------------------------------------------------
@@ -344,9 +390,16 @@ run_gap_analysis <- function(all_data, dist_km, method = c("buffer", "hull"),
   report <- function(v, d) if (is.function(progress)) progress(v, d)
   stopifnot(is.data.frame(all_data), nrow(all_data) > 0, is.numeric(dist_km), dist_km > 0)
 
+  target_col <- "Current Germplasm Type"
+  # Safeguard (T-01, audit C-2): only G/H rows take part in anything below
+  # (SRS counts, the range model, GRS, the ERS universe, the returned records).
+  # read_upload_file() already drops anything else, so this is a belt-and-braces
+  # filter for data that arrives by another route.
+  all_data <- all_data[all_data[[target_col]] %in% c("G", "H"), , drop = FALSE]
+  if (nrow(all_data) == 0) stop("No G or H records to analyse.")
+
   data <- prep_lat_lon(all_data)
   if (nrow(data) == 0) stop("No records with valid coordinates to analyse.")
-  target_col <- "Current Germplasm Type"
 
   report(0.1, "Calculating SRSex...")
   srsMetrics <- SRSex(taxon = NULL, occurrence_Data = all_data)
