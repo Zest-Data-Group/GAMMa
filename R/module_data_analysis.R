@@ -96,6 +96,7 @@ dataAnalysisUI <- function(id) {
 dataAnalysisServer <- function(id, analysis_data, selected_points) {
   moduleServer(id, function(input, output, session) {
     analysis_data_backup <- reactiveVal(data.frame())
+    backup_sig <- reactiveVal(NULL)   # digest of the frame the last delete produced
 
     # Load Internal Modules ------------------------------------------------------
     controlsModuleServer("controls", analysis_data, selected_points) 
@@ -206,9 +207,22 @@ dataAnalysisServer <- function(id, analysis_data, selected_points) {
     # NOTE: any change to analysis_data() (delete / undo / new upload / new GBIF
     # pull) also clears the gap-analysis results: gapAnalysisServer observes
     # analysis_data() and resets its map layers, scores and report state.
+    #
+    # Undo is single-level and is valid only while the live dataset is still
+    # the frame that the delete produced. Delete stores the pre-delete frame in
+    # analysis_data_backup and a digest of the post-delete frame in backup_sig;
+    # undo_available() compares that digest with the live frame. Any other
+    # writer of analysis_data() (GBIF gather, upload, their overwrite confirms
+    # in module_controls.R) changes the digest, so the backup is dropped and the
+    # Undo button greys out silently rather than replacing the new data.
+    undo_available <- reactive({
+      nrow(analysis_data_backup()) > 0 &&
+        !is.null(backup_sig()) &&
+        identical(digest::digest(analysis_data()), backup_sig())
+    })
+
     observeEvent(input$deleteSelection, {
       req(nrow(analysis_data()) > 0)
-      analysis_data_backup(analysis_data())
       current_data <- analysis_data()
       current_selection <- selected_points()
 
@@ -216,22 +230,32 @@ dataAnalysisServer <- function(id, analysis_data, selected_points) {
         showNotification("No records selected to delete", type = "warning")
         return()
       }
-      updated_data <- current_data %>% filter(!index %in% current_selection) %>% mutate(index = row_number()) 
+      analysis_data_backup(current_data)
+      updated_data <- current_data %>% filter(!index %in% current_selection) %>% mutate(index = row_number())
+      backup_sig(digest::digest(updated_data))
       analysis_data(updated_data)
       selected_points(numeric(0))
       showNotification(paste0("Successfully deleted ", length(current_selection), " record", if (length(current_selection) > 1) "s"), type = "message")
     })
 
     observe({
-      shinyjs::toggleState("undoLastDelete", condition = nrow(analysis_data_backup()) > 0)
+      available <- undo_available()
+      shinyjs::toggleState("undoLastDelete", condition = available)
+      if (!available && nrow(analysis_data_backup()) > 0) {
+        # the dataset moved on since the delete: the backup can never apply again
+        analysis_data_backup(data.frame())
+        backup_sig(NULL)
+      }
     })
 
     observeEvent(input$undoLastDelete, {
-      req(nrow(analysis_data_backup()) > 0)
+      req(undo_available())
       numRestoredRecords <- nrow(analysis_data_backup()) - nrow(analysis_data())
       analysis_data(analysis_data_backup())
       showNotification(paste0("Successfully restored ", numRestoredRecords, " record", if (numRestoredRecords > 1) "s"), type = "message")
+      selected_points(numeric(0))
       analysis_data_backup(data.frame())
+      backup_sig(NULL)
     })
 
     observeEvent(input$clearSelection, {

@@ -26,6 +26,12 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   `run_gap_analysis()` also filters to G/H as a safeguard. Closes audit M-13
   (report recoding blank types to H) by construction, since blanks never
   enter the dataset (T-01).
+- Data page: Undo Delete only restores while the dataset is still the one the
+  delete produced (a digest of the post-delete frame is kept); a GBIF gather or
+  upload after a delete greys the button out instead of being replaced by the
+  old snapshot. A Delete with nothing selected no longer overwrites the backup,
+  and Undo clears the current selection so indices cannot drift (T-02, audit
+  C-3/M-9).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 
