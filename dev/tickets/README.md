@@ -13,6 +13,7 @@ Status line in the ticket file and append to its Notes section as you go.
 | [T-01 Drop non-G/H rows at upload](T-01-germplasm-type-drop.md) | C-2 (+ makes M-13 moot) | `fix/t01-germplasm-type` | done |
 | [T-02 Undo Delete validity](T-02-undo-delete-signature.md) | C-3, M-9 | `fix/t02-undo-signature` | done |
 | [T-03 Antimeridian convex hull](T-03-antimeridian-hull.md) | C-1 | `fix/t03-antimeridian-hull` | done |
+| [T-04 Hull G area vs geodesic expanse](T-04-hull-geodesic-area.md) | found in T-03, not in audit | `fix/t04-hull-geodesic-area` | todo (needs grilling) |
 
 ## Executing a ticket (for an agent)
 
