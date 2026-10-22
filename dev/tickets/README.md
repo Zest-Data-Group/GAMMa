@@ -12,7 +12,7 @@ Status line in the ticket file and append to its Notes section as you go.
 | [T-00 Make the test suite green](T-00-tests-green.md) | L-11, L-12 | `fix/t00-tests-green` | done |
 | [T-01 Drop non-G/H rows at upload](T-01-germplasm-type-drop.md) | C-2 (+ makes M-13 moot) | `fix/t01-germplasm-type` | done |
 | [T-02 Undo Delete validity](T-02-undo-delete-signature.md) | C-3, M-9 | `fix/t02-undo-signature` | done |
-| [T-03 Antimeridian convex hull](T-03-antimeridian-hull.md) | C-1 | `fix/t03-antimeridian-hull` | todo |
+| [T-03 Antimeridian convex hull](T-03-antimeridian-hull.md) | C-1 | `fix/t03-antimeridian-hull` | done |
 
 ## Executing a ticket (for an agent)
 
