@@ -7,7 +7,7 @@ The **Gap Analysis** page estimates how well the germplasm (**G**) records repre
 Two methods are offered for estimating the wild range from the records with coordinates:
 
 * **Buffer around records (default):** a circular buffer of the chosen distance is drawn around every record, and the union of those buffers, clipped to land, is taken as the range.
-* **Convex hull around records:** the smallest convex polygon enclosing all records, clipped to land, is taken as the range. This fills the space between scattered records and needs at least three records at distinct locations. With this method the buffer distance is applied to the germplasm records only.
+* **Convex hull around records:** the smallest convex polygon enclosing all records, clipped to land, is taken as the range. This fills the space between scattered records and needs at least three records at distinct locations. The hull is built around the largest gap in longitude between records, so it works for records on either side of the antimeridian (180°) and for species present in both the Eastern and Western Hemispheres. With this method the buffer distance is applied to the germplasm records only.
 
 #### Three scores
 

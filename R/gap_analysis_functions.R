@@ -309,21 +309,53 @@ ERSex <- function(gapPoints, g_buffer, ecoRegions = gap_ecoregions()) {
 
 
 # --- Range model: convex hull ----------------------------------------------------
+# Midpoint of the largest empty longitudinal gap between records, in (-180, 180].
+# A hull built on longitudes unwrapped around this seam never crosses the gap,
+# so it wraps the way that avoids the largest ocean, whichever that is.
+antimeridian_seam <- function(lon) {
+  s <- sort(unique(lon))
+  if (length(s) == 1) return(((s + 360) %% 360) - 180)
+  gaps <- diff(c(s, s[1] + 360))
+  i <- which.max(gaps)
+  seam <- s[i] + gaps[i] / 2
+  ((seam + 180) %% 360) - 180
+}
+
+# Place every longitude in the window (seam - 360, seam].
+unwrap_lon <- function(lon, seam) ifelse(lon > seam, lon - 360, lon)
+
 # Convex hull around every record with coordinates, clipped to land. Needs at
 # least three distinct, non-collinear locations to enclose an area.
+#
+# The hull is planar in lon/lat (T-03, audit C-1). Longitudes are unwrapped
+# around the seam first, so records straddling 180 degrees, or spread over
+# both hemispheres, hull across the narrower gap instead of the wrong way
+# round the globe. When the unwrapped hull reaches past -180 the land is
+# re-wrapped at the seam before clipping and the result rotated back to
+# -180..180, where it may be a multipolygon split at the antimeridian.
 convex_hull_range <- function(v, land_proj) {
   coords <- unique(terra::crds(v))
   if (nrow(coords) < 3) {
     stop("The convex hull method needs at least 3 records at distinct locations; use the buffer method instead.")
   }
-  hull <- terra::convHull(v)
+  seam  <- antimeridian_seam(coords[, 1])
+  lon_u <- unwrap_lon(coords[, 1], seam)
+  v_u   <- terra::vect(cbind(lon_u, coords[, 2]), crs = "EPSG:4326")
+  hull  <- terra::convHull(v_u)
   if (terra::geomtype(hull) != "polygons" || terra::expanse(hull, unit = "km") <= 0) {
     stop("The records are collinear, so a convex hull has no area; use the buffer method instead.")
   }
   hull$processing_type <- "range"
-  clipped <- terra::intersect(hull, land_proj)
+  crosses <- min(lon_u) < -180
+  land_u  <- if (crosses) terra::rotate(land_proj, longitude = seam, split = TRUE, left = TRUE) else land_proj
+  clipped <- terra::intersect(hull, land_u)
   if (length(clipped) == 0) stop("The convex hull does not overlap any land area.")
-  terra::aggregate(clipped)
+  out <- terra::aggregate(clipped)
+  if (crosses) {
+    out <- terra::rotate(out, longitude = -180, split = TRUE, left = FALSE)
+    if (!identical(terra::crs(out), terra::crs(v))) terra::crs(out) <- terra::crs(v)
+  }
+  out
 }
 
 # --- Whole pipeline ------------------------------------------------------------

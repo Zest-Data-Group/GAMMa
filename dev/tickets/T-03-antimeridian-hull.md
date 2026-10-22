@@ -1,6 +1,6 @@
 # T-03: Convex hull range that works across the antimeridian and both hemispheres
 
-Status: todo
+Status: done
 Branch: `fix/t03-antimeridian-hull` (from `dev`)
 Spec: `dev/specs/critical-fixes.md` section "T-03"
 Audit: `BUG_AUDIT_2026-10-17.md` finding C-1 (critical)
@@ -109,27 +109,27 @@ All in `tests/testthat/test-gap_metrics.R`. Build fixtures in-memory from the
 first rows of `load_fixture_dataset("Magnolia_acuminata_data_small.csv")` with
 Longitude/Latitude/type overwritten, so the frame has the canonical schema.
 
-- [ ] Fiji: lon 179.9,-179.9,178.5,177.5; lat -16.8,-17.5,-16.5,-18.1; types
+- [x] Fiji: lon 179.9,-179.9,178.5,177.5; lat -16.8,-17.5,-16.5,-18.1; types
       G,H,H,H; `run_gap_analysis(d, 25, method = "hull")`: no warning;
       `Area of model km2` between 5,000 and 12,000; `G buffer areas in model
       km2 > 0`; `GRS exsitu > 0`; `sf::st_bbox(sf_model)$xmin >= 177 ||
       xmax <= -179` style check that no piece reaches into the central Pacific
       (assert no vertex longitude between -170 and 170).
-- [ ] Two hemispheres: lon -84,-80,-75,138,140,142; lat 35,40,38,35,37,40;
+- [x] Two hemispheres: lon -84,-80,-75,138,140,142; lat 35,40,38,35,37,40;
       types G,H,G,H,G,H; hull at 50 km succeeds; no vertex of `sf_model` has
       longitude between -60 and 120 (the hull crossed the Pacific, not the
       Atlantic/Eurasia); `Area of model km2` finite and > 1e6.
-- [ ] Invariance: for the two-hemisphere longitudes `L`, compare
+- [x] Invariance: for the two-hemisphere longitudes `L`, compare
       `terra::expanse(terra::convHull(vect(unwrapped L)))` with the same for
       `((L + 100 + 180) %% 360) - 180`; equal within 1e-6 relative. Also
       `antimeridian_seam(c(-45,-46,-44,-45.5)) == 135` and
       `antimeridian_seam(c(179.9,-179.9,178.5,177.5)) == -1.2` (tolerance 1e-9).
-- [ ] Control: Fiji shape translated by -225° (Brazil) gives `Area of model
+- [x] Control: Fiji shape translated by -225° (Brazil) gives `Area of model
       km2` 26,409 ± 1%, and `crosses` logic did not alter the existing small
       Magnolia hull result (existing hull test still passes unchanged).
-- [ ] Existing degenerate-input tests (fewer than 3 distinct, collinear,
+- [x] Existing degenerate-input tests (fewer than 3 distinct, collinear,
       ocean-only) unchanged and passing.
-- [ ] `Rscript tests/testthat.R` reports FAIL 0.
+- [x] `Rscript tests/testthat.R` reports FAIL 0.
 
 ## Files
 
@@ -142,4 +142,44 @@ Longitude/Latitude/type overwritten, so the frame has the canonical schema.
 - Prototype script used for the table above: `dev/prototype_antimeridian_hull.R`
   (run from the repo root). Its seam normalisation differs slightly from the
   helper above; the helper is the reference.
-(append here while executing)
+- 2026-10-22, executed on branch `fix/t03-antimeridian-hull` from
+  `fix/critical-fixes` (624a03f). Implementation is the Change section
+  verbatim, plus a CRS re-set after the rotate-back if terra dropped it.
+- Measured on this machine (terra 1.9.50): Fiji hull 7,787.0 km², G area
+  36.0 km², GRS 0.46, model bbox 177.5..179.95 (5 land pieces); two
+  hemispheres 2,265,685.5 km², bbox -124.0..142.1 (3 pieces, hull crosses the
+  Pacific); Brazil control 26,409.3 km² (seam 133.8, no crossing). All three
+  equal the prototype table.
+- Deviation, "no warning" on Fiji: `convex_hull_range()` is silent and the
+  `[intersect] no intersection` from the audit is gone from the hull/G-clip
+  steps, but `ERSex` still emits that warning on this fixture under BOTH
+  methods: the only record inside a simplified ecoregion is 177.5,-18.1
+  (Fiji tropical dry forests) while the G buffer touches Fiji tropical moist
+  forests, which holds no record, so the conserved-ecoregion intersect is
+  empty (ERS 0 either way, matching the audit's FCS arithmetic). ERSex is out
+  of scope, so the test asserts no warning from `convex_hull_range()` and
+  that the hull run's warnings equal the buffer run's on the same fixture.
+- Control test feeds the translated longitudes re-wrapped into -180..180
+  (seam 133.8 as in the table); the prototype passed raw `lon - 225` and
+  printed seam -226.2 for the same shape.
+- Finding for a follow-up ticket (pre-existing, not caused by T-03): with the
+  hull method `GRSex` derives the G area as `expanse(model) -
+  expanse(erase(model, gBuff))`, and `terra::expanse` measures lon/lat edges
+  as geodesics while the hull edges are straight lines in lon/lat. Erasing a
+  G buffer that sits on a long hull edge splits that edge, which changes the
+  geodesic bow by thousands of km² (about L²/8R per edge), so the erased
+  polygon can measure LARGER than the model and G collapses to 0. Reproduced
+  with no antimeridian involvement: eastern US hull (lon -84,-80,-75,-90,-70;
+  lat 35,40,38,33,42; G,H,G,H,G; 50 km) gives model 358,554 km², erase
+  370,570, G 0, although the clipped G buffers union to 5,209 km²; the
+  two-hemisphere fixture here gives G 0 against a true 10,683 km²; the small
+  Magnolia fixture reports G 7,307 against a true 10,658 km² and its model
+  area 2,109,402 against 2,267,542 km² when the edges are densified
+  (`terra::densify(x, 0.02, flat = TRUE)` makes every case agree within
+  0.2%). Candidates: densify the hull before clipping (keeps it planar in
+  lon/lat), or compute the G area directly as `expanse(aggregate(gBuff))`.
+  Left alone here because GRSex is out of scope and the spec defers the
+  geodesic/projected hull; the two-hemisphere acceptance criteria do not
+  depend on the G area.
+- `Rscript tests/testthat.R`: [ FAIL 0 | WARN 3 | SKIP 1 | PASS 375 ]
+  (baseline 359; the 3 warnings are the pre-existing ones).

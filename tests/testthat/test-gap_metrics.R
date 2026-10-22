@@ -185,3 +185,70 @@ test_that("run_gap_analysis ignores rows whose germplasm type is not G or H", {
   expect_error(run_gap_analysis(all_x, 50, land = L$land, ecoRegions = L$eco), "No G or H")
 })
 
+# T-03 (audit C-1): the hull is built on longitudes unwrapped around the
+# largest empty gap between records, so it never spans the Pacific the wrong
+# way round. Fixtures reuse the small Magnolia rows with coordinates and types
+# overwritten so the frame keeps the canonical schema.
+hull_fixture <- function(lon, lat, type) {
+  d <- load_fixture_dataset("Magnolia_acuminata_data_small.csv")[seq_along(lon), ]
+  d$Longitude <- lon; d$Latitude <- lat; d$`Current Germplasm Type` <- type
+  d
+}
+vertex_lon <- function(sf_model) sf::st_coordinates(sf_model)[, "X"]
+
+fiji_lon <- c(179.9, -179.9, 178.5, 177.5); fiji_lat <- c(-16.8, -17.5, -16.5, -18.1)
+wrap_lon <- function(lon) ((lon + 180) %% 360) - 180
+
+test_that("convex hull range works for records straddling the antimeridian (Fiji)", {
+  L <- gap_layers()
+  fiji <- hull_fixture(fiji_lon, fiji_lat, c("G", "H", "H", "H"))
+  # The hull step itself is silent. ERSex still warns "[intersect] no
+  # intersection" on this fixture under BOTH methods (the G buffer touches an
+  # ecoregion that holds no record, so the conserved-ecoregion intersect is
+  # empty); that is ERSex behaviour, out of scope here, so the pipeline check
+  # is that the hull run adds no warning beyond the buffer run's.
+  v <- terra::vect(prep_lat_lon(fiji), geom = c("Longitude", "Latitude"), crs = "EPSG:4326")
+  expect_no_warning(convex_hull_range(v, terra::project(L$land, "EPSG:4326")))
+  hull_warnings <- capture_warnings(r <- run_gap_analysis(fiji, 25, method = "hull", land = L$land, ecoRegions = L$eco))
+  buffer_warnings <- capture_warnings(run_gap_analysis(fiji, 25, method = "buffer", land = L$land, ecoRegions = L$eco))
+  expect_equal(hull_warnings, buffer_warnings)
+  expect_gt(r$grs$`Area of model km2`, 5000)
+  expect_lt(r$grs$`Area of model km2`, 12000)
+  expect_gt(r$grs$`G buffer areas in model km2`, 0)
+  expect_gt(r$grs$`GRS exsitu`, 0)
+  # no piece of the range reaches into the central Pacific
+  expect_false(any(vertex_lon(r$sf_model) > -170 & vertex_lon(r$sf_model) < 170))
+})
+
+test_that("convex hull range spans the Pacific, not the Atlantic, for a two-hemisphere species", {
+  L <- gap_layers()
+  two <- hull_fixture(c(-84, -80, -75, 138, 140, 142), c(35, 40, 38, 35, 37, 40), c("G", "H", "G", "H", "G", "H"))
+  r <- run_gap_analysis(two, 50, method = "hull", land = L$land, ecoRegions = L$eco)
+  expect_false(any(vertex_lon(r$sf_model) > -60 & vertex_lon(r$sf_model) < 120))
+  expect_true(is.finite(r$grs$`Area of model km2`))
+  expect_gt(r$grs$`Area of model km2`, 1e6)
+})
+
+test_that("antimeridian_seam and unwrap_lon are invariant to a longitude shift", {
+  expect_equal(antimeridian_seam(c(-45, -46, -44, -45.5)), 135, tolerance = 1e-9)
+  expect_equal(antimeridian_seam(fiji_lon), -1.2, tolerance = 1e-9)
+  expect_equal(unwrap_lon(fiji_lon, -1.2), c(-180.1, -179.9, -181.5, -182.5), tolerance = 1e-9)
+
+  lon <- c(-84, -80, -75, 138, 140, 142); lat <- c(35, 40, 38, 35, 37, 40)
+  hull_expanse <- function(lon) {
+    u <- unwrap_lon(lon, antimeridian_seam(lon))
+    terra::expanse(terra::convHull(terra::vect(cbind(u, lat), crs = "EPSG:4326")), unit = "km")
+  }
+  # geodesic area is invariant to a longitude shift, so any difference means
+  # the unwrap chose a different arc around the globe
+  expect_equal(hull_expanse(lon), hull_expanse(wrap_lon(lon + 100)), tolerance = 1e-6)
+})
+
+test_that("convex hull range away from the antimeridian is unchanged (Fiji shape in Brazil)", {
+  L <- gap_layers()
+  brazil <- hull_fixture(wrap_lon(fiji_lon - 225), fiji_lat, c("G", "H", "H", "H"))
+  expect_equal(antimeridian_seam(brazil$Longitude), 133.8, tolerance = 1e-9)
+  r <- run_gap_analysis(brazil, 25, method = "hull", land = L$land, ecoRegions = L$eco)
+  expect_equal(r$grs$`Area of model km2`, 26409, tolerance = 0.01)   # audit C-1 control value
+})
+

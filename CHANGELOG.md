@@ -26,6 +26,13 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   `run_gap_analysis()` also filters to G/H as a safeguard. Closes audit M-13
   (report recoding blank types to H) by construction, since blanks never
   enter the dataset (T-01).
+- Gap analysis: the convex hull range now works for records straddling the
+  antimeridian and for species in both hemispheres. Longitudes are unwrapped
+  around the largest empty gap between records before hulling, and the land
+  clip is re-wrapped to match, so a Fijian set no longer hulls the Pacific the
+  wrong way round with G area 0 and GRS 0 (audit C-1, T-03). The hull is still
+  drawn in lon/lat; a geodesic (projected) hull is a possible later
+  improvement.
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 
