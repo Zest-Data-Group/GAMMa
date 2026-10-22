@@ -87,11 +87,19 @@ read_upload_file <- function(file_info) {
     # Only rows typed G or H (after trimws + toupper) take part in the analysis.
     # Anything else (blank, "SEED", "X", ...) is dropped here so it never enters
     # the working dataset; the caller shows a confirmation modal before committing.
-    type <- toupper(trimws(data$`Current Germplasm Type`))
+    raw  <- data$`Current Germplasm Type`
+    type <- toupper(trimws(raw))
     type[is.na(type)] <- ""
     keep <- type %in% c("G", "H")
     n_dropped_type <- sum(!keep)
-    dropped_values <- head(unique(type[!keep]), 5)
+    # The offending values as the user wrote them (an empty cell reads as NA and
+    # is reported as "blank"), distinct, capped at 5 for the confirmation modal;
+    # n_dropped_values is the uncapped distinct count so the modal can say
+    # how many more there were.
+    dropped_distinct <- unique(raw[!keep])
+    dropped_distinct[is.na(dropped_distinct)] <- "blank"
+    n_dropped_values <- length(dropped_distinct)
+    dropped_values   <- head(dropped_distinct, 5)
 
     if (n_dropped_type > 0 && !any(keep)) {
       return(list(
@@ -133,7 +141,8 @@ read_upload_file <- function(file_info) {
       message = msg_text,
       message_type = msg_type,
       n_dropped_type = n_dropped_type,
-      dropped_values = dropped_values
+      dropped_values = dropped_values,
+      n_dropped_values = n_dropped_values
     )
 
   }, error = function(e) {

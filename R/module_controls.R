@@ -684,14 +684,17 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       if (isTRUE(res$n_dropped_type > 0)) {
         pendingTypeDrop(res)
         n_total <- nrow(res$data) + res$n_dropped_type
-        found <- vapply(res$dropped_values, function(v) if (v == "") "blank" else sprintf('"%s"', v), character(1))
+        # dropped_values is capped at 5 distinct values; n_dropped_values is the full count
+        found <- vapply(res$dropped_values, function(v) if (v == "blank") v else sprintf('"%s"', v), character(1))
+        n_more <- res$n_dropped_values - length(res$dropped_values)
+        found_txt <- paste0(paste(found, collapse = ", "), if (n_more > 0) sprintf(" (+%d more)", n_more) else "")
         showModal(modalDialog(
           title = "Records without a germplasm type",
           sprintf(paste(
             "%d of %d records have a blank or unrecognised Current Germplasm Type (found: %s).",
             "Only records typed G or H are analysed, so these records will be dropped.",
             "To include them, assign a type of G or H in your file and upload it again."
-          ), res$n_dropped_type, n_total, paste(found, collapse = ", ")),
+          ), res$n_dropped_type, n_total, found_txt),
           footer = tagList(
             actionButton(session$ns("cancelTypeDrop"), "Cancel upload"),
             actionButton(session$ns("confirmTypeDrop"), "Drop them and continue", class = "btn-primary")
@@ -711,10 +714,11 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       commit_upload(res)
     })
 
+    # Cancel leaves the working dataset and the status box as they were: the
+    # pending upload never wrote to either, so an earlier upload's status stays.
     observeEvent(input$cancelTypeDrop, {
       pendingTypeDrop(NULL)
       shinyjs::reset("uploadData")
-      upload_status(NULL)
       removeModal()
     })
 

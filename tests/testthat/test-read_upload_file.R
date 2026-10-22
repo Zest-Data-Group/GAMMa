@@ -107,7 +107,19 @@ test_that("rows with a blank or unrecognised germplasm type are dropped with a w
   expect_match(res$message, "2 records")
   expect_true(all(res$data$`Current Germplasm Type` %in% c("G", "H")))
   expect_equal(res$data$index, seq_len(8))                      # re-indexed after the drop
-  expect_setequal(res$dropped_values, c("", "X"))
+  expect_setequal(res$dropped_values, c("blank", "X"))          # NA (empty cell) is reported as "blank"
+  expect_equal(res$n_dropped_values, 2)
+})
+
+test_that("dropped type values keep the user's spelling, capped at 5 with the full distinct count", {
+  bad <- c("seed", "Seed", " x ", "Living", "H2", "unknown")
+  res <- read_upload_file(small_fixture_plus_types(bad))
+  expect_equal(res$status, "success")
+  expect_equal(nrow(res$data), 8)
+  expect_equal(res$n_dropped_type, 6)
+  expect_equal(res$n_dropped_values, 6)
+  expect_length(res$dropped_values, 5)
+  expect_equal(res$dropped_values, c("seed", "Seed", "x", "Living", "H2"))   # raw case; readr trims padding
 })
 
 test_that("lower-case and padded G/H values are kept, nothing dropped", {
@@ -116,6 +128,7 @@ test_that("lower-case and padded G/H values are kept, nothing dropped", {
   expect_equal(nrow(res$data), 10)
   expect_equal(res$n_dropped_type, 0)
   expect_equal(res$dropped_values, character(0))
+  expect_equal(res$n_dropped_values, 0)
   expect_equal(res$message_type, "message")
 })
 

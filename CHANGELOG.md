@@ -23,11 +23,13 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   removed. Suite is green again (T-00, audit L-11/L-12).
 - Upload: rows whose Current Germplasm Type is not G or H are dropped at
   upload after confirmation; they no longer inflate GRS/ERS (#audit C-2).
-  `run_gap_analysis()` also filters to G/H as a safeguard. Closes audit M-13
-  (report recoding blank types to H) by construction, since blanks never
-  enter the dataset (T-01).
+  `run_gap_analysis()` also filters to G/H as a safeguard, so SRS record
+  counts exclude such rows too. Cancelling the drop confirmation leaves an
+  earlier upload and its status line untouched. Closes audit M-13 (report
+  recoding blank types to H) by construction, since blanks never enter the
+  dataset (T-01).
 - Data page: Undo Delete only restores while the dataset is still the one the
-  delete produced (a digest of the post-delete frame is kept); a GBIF gather or
+  delete produced (the post-delete frame is kept for comparison); a GBIF gather or
   upload after a delete greys the button out instead of being replaced by the
   old snapshot. A Delete with nothing selected no longer overwrites the backup,
   and Undo clears the current selection so indices cannot drift (T-02, audit

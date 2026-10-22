@@ -139,9 +139,15 @@ Longitude/Latitude/type overwritten, so the frame has the canonical schema.
 
 ## Notes
 
-- Prototype script used for the table above: `dev/prototype_antimeridian_hull.R`
-  (run from the repo root). Its seam normalisation differs slightly from the
-  helper above; the helper is the reference.
+- The prototype script that produced the table above
+  (`dev/prototype_antimeridian_hull.R`) was removed after T-03 landed: it
+  duplicated and had diverged from the production helpers. `antimeridian_seam()`
+  and `unwrap_lon()` in `R/gap_analysis_functions.R` are the reference.
+- Code review after landing: `antimeridian_seam()` now really returns
+  (-180, 180] (the old formula gave [-180, 180) and the single-longitude branch
+  could return exactly -180; it now returns the antipode), and `unwrap_lon()`
+  shifts an all-east-of-seam set back by 360 so an Eastern-hemisphere-only
+  hull (Europe, Japan, Australia) no longer rotates the land layer for nothing.
 - 2026-10-22, executed on branch `fix/t03-antimeridian-hull` from
   `fix/critical-fixes` (624a03f). Implementation is the Change section
   verbatim, plus a CRS re-set after the rotate-back if terra dropped it.

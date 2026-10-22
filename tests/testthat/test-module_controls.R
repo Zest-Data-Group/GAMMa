@@ -144,7 +144,7 @@ test_that("uploading rows without a G/H germplasm type asks before dropping them
     expect_null(upload_status())
     expect_equal(pendingTypeDrop()$n_dropped_type, 2)
 
-    # Cancel: dataset untouched, status box empty, nothing pending
+    # Cancel: dataset untouched, status box unchanged (still empty), nothing pending
     session$setInputs(cancelTypeDrop = 1)
     expect_equal(nrow(analysis_data()), 0)
     expect_null(upload_status())
@@ -159,6 +159,16 @@ test_that("uploading rows without a G/H germplasm type asks before dropping them
     expect_true(all(analysis_data()$source == "upload"))
     expect_equal(upload_status()$type, "warning")
     expect_match(upload_status()$text, "2 records")
+    expect_null(pendingTypeDrop())
+
+    # Cancelling a later attempt keeps the loaded data AND its status line:
+    # the pending upload never wrote to the status box, so nothing is wiped
+    before <- upload_status()
+    session$setInputs(uploadData = mixed_type_upload())
+    expect_equal(pendingTypeDrop()$n_dropped_type, 2)
+    session$setInputs(cancelTypeDrop = 2)
+    expect_equal(nrow(analysis_data()), 8)
+    expect_identical(upload_status(), before)
     expect_null(pendingTypeDrop())
   })
 })

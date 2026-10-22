@@ -309,20 +309,34 @@ ERSex <- function(gapPoints, g_buffer, ecoRegions = gap_ecoregions()) {
 
 
 # --- Range model: convex hull ----------------------------------------------------
-# Midpoint of the largest empty longitudinal gap between records, in (-180, 180].
-# A hull built on longitudes unwrapped around this seam never crosses the gap,
-# so it wraps the way that avoids the largest ocean, whichever that is.
-antimeridian_seam <- function(lon) {
-  s <- sort(unique(lon))
-  if (length(s) == 1) return(((s + 360) %% 360) - 180)
-  gaps <- diff(c(s, s[1] + 360))
-  i <- which.max(gaps)
-  seam <- s[i] + gaps[i] / 2
-  ((seam + 180) %% 360) - 180
+# Wrap longitudes into (-180, 180].
+wrap_lon_180 <- function(lon) {
+  lon <- lon %% 360
+  ifelse(lon > 180, lon - 360, lon)
 }
 
-# Place every longitude in the window (seam - 360, seam].
-unwrap_lon <- function(lon, seam) ifelse(lon > seam, lon - 360, lon)
+# Midpoint of the largest empty longitudinal gap between records, in (-180, 180].
+# A hull built on longitudes unwrapped around this seam never crosses the gap,
+# so it wraps the way that avoids the largest ocean, whichever that is. A single
+# longitude has no gap: its antipode is the seam.
+antimeridian_seam <- function(lon) {
+  s <- sort(unique(lon))
+  if (length(s) == 1) return(wrap_lon_180(s + 180))
+  gaps <- diff(c(s, s[1] + 360))
+  i <- which.max(gaps)
+  wrap_lon_180(s[i] + gaps[i] / 2)
+}
+
+# Place every longitude in the window (seam - 360, seam]. When every record
+# then sits at or beyond -180 the whole set is east of the seam with nothing
+# on the other side, so it is shifted back by 360: the result stays inside
+# -180..180 and only reaches below -180 when records really lie on both sides
+# of the antimeridian.
+unwrap_lon <- function(lon, seam) {
+  u <- ifelse(lon > seam, lon - 360, lon)
+  if (max(u) <= -180) u <- u + 360
+  u
+}
 
 # Convex hull around every record with coordinates, clipped to land. Needs at
 # least three distinct, non-collinear locations to enclose an area.
@@ -377,13 +391,15 @@ run_gap_analysis <- function(all_data, dist_km, method = c("buffer", "hull"),
   stopifnot(is.data.frame(all_data), nrow(all_data) > 0, is.numeric(dist_km), dist_km > 0)
 
   target_col <- "Current Germplasm Type"
+  # Safeguard (T-01, audit C-2): only G/H rows take part in anything below
+  # (SRS counts, the range model, GRS, the ERS universe, the returned records).
+  # read_upload_file() already drops anything else, so this is a belt-and-braces
+  # filter for data that arrives by another route.
+  all_data <- all_data[all_data[[target_col]] %in% c("G", "H"), , drop = FALSE]
+  if (nrow(all_data) == 0) stop("No G or H records to analyse.")
+
   data <- prep_lat_lon(all_data)
   if (nrow(data) == 0) stop("No records with valid coordinates to analyse.")
-  # Safeguard (T-01, audit C-2): only G/H rows may shape the range model, GRS
-  # and the ERS universe. read_upload_file() already drops anything else, so
-  # this is a belt-and-braces filter for data that arrives by another route.
-  data <- data[data[[target_col]] %in% c("G", "H"), , drop = FALSE]
-  if (nrow(data) == 0) stop("No G or H records with valid coordinates to analyse.")
 
   report(0.1, "Calculating SRSex...")
   srsMetrics <- SRSex(taxon = NULL, occurrence_Data = all_data)

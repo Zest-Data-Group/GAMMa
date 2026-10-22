@@ -110,3 +110,7 @@ the helpers. Follow the patterns in `test-module_controls.R`. Read
 - Full suite on the ticket branch: `[ FAIL 0 | WARN 3 | SKIP 1 | PASS 340 ]`
   (baseline 323 + 17 new expectations; the 3 warnings and 1 skip are the
   pre-existing ones from the integration branch).
+- Code review after landing: the digest was replaced by keeping the post-delete
+  frame itself in a reactiveVal (`post_delete`) and testing
+  `identical(analysis_data(), post_delete())`; same semantics, no `digest`
+  dependency. Tests unchanged.

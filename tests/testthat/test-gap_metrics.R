@@ -167,11 +167,11 @@ test_that("run_gap_analysis ignores rows whose germplasm type is not G or H", {
 
   # a far-away coordinate row with no usable type: if it were buffered it would
   # add area to the model and a new ecoregion to the ERS universe
-  extra <- d[1, ]
+  extra <- d[1:2, ]
   extra$`Current Germplasm Type` <- "X"
-  extra$Latitude <- 30.3; extra$Longitude <- -97.7     # Austin TX, outside every fixture buffer
+  extra$Latitude <- c(30.3, 30.4); extra$Longitude <- c(-97.7, -97.8)   # Austin TX, outside every fixture buffer
   mixed <- merge_and_index(d, extra)
-  expect_equal(nrow(mixed), 9)
+  expect_equal(nrow(mixed), 10)
   r <- run_gap_analysis(mixed, 50, land = L$land, ecoRegions = L$eco)
 
   expect_equal(r$grs$`GRS exsitu`, base$grs$`GRS exsitu`, tolerance = 1e-6)
@@ -180,9 +180,16 @@ test_that("run_gap_analysis ignores rows whose germplasm type is not G or H", {
   expect_equal(r$priority$code, base$priority$code)
   expect_equal(nrow(r$points), 8)
   expect_true(all(r$sf_buffers$processing_type %in% c("G", "H")))
+  # SRS, the taxon label and the returned records never see the dropped rows
+  expect_equal(r$srs$`Total records`, 8)
+  expect_equal(r$srs, base$srs)
+  expect_equal(nrow(r$records), 8)
+  expect_true(all(r$records$`Current Germplasm Type` %in% c("G", "H")))
 
   all_x <- d; all_x$`Current Germplasm Type` <- "X"
   expect_error(run_gap_analysis(all_x, 50, land = L$land, ecoRegions = L$eco), "No G or H")
+  no_coords <- d; no_coords$Latitude <- NA_real_
+  expect_error(run_gap_analysis(no_coords, 50, land = L$land, ecoRegions = L$eco), "valid coordinates")
 })
 
 # T-03 (audit C-1): the hull is built on longitudes unwrapped around the
@@ -229,9 +236,35 @@ test_that("convex hull range spans the Pacific, not the Atlantic, for a two-hemi
   expect_gt(r$grs$`Area of model km2`, 1e6)
 })
 
-test_that("antimeridian_seam and unwrap_lon are invariant to a longitude shift", {
+test_that("antimeridian_seam is the midpoint of the largest gap, normalised into (-180, 180]", {
+  expect_equal(antimeridian_seam(0), 180)                                   # one longitude: its antipode
+  expect_equal(antimeridian_seam(90), -90)
   expect_equal(antimeridian_seam(c(-45, -46, -44, -45.5)), 135, tolerance = 1e-9)
   expect_equal(antimeridian_seam(fiji_lon), -1.2, tolerance = 1e-9)
+  set.seed(42)
+  for (i in seq_len(30)) {
+    s <- antimeridian_seam(runif(sample(1:8, 1), -180, 180))
+    expect_gt(s, -180); expect_lte(s, 180)
+  }
+  expect_gt(antimeridian_seam(c(-180, 180)), -180)
+})
+
+test_that("unwrap_lon keeps an all-Eastern-hemisphere set inside -180..180 (no rotation needed)", {
+  europe_lon <- c(10, 15, 20, 12)
+  u <- unwrap_lon(europe_lon, antimeridian_seam(europe_lon))
+  expect_true(all(u >= -180 & u <= 180))
+  expect_equal(u, europe_lon)
+  expect_equal(unwrap_lon(c(140, 150, 160), antimeridian_seam(c(140, 150, 160))), c(140, 150, 160))
+
+  L <- gap_layers()
+  europe <- hull_fixture(europe_lon, c(45, 50, 48, 52), c("G", "H", "H", "H"))
+  r <- run_gap_analysis(europe, 25, method = "hull", land = L$land, ecoRegions = L$eco)
+  bb <- sf::st_bbox(r$sf_model)
+  expect_gte(bb[["xmin"]], 9); expect_lte(bb[["xmax"]], 21)
+  expect_gt(r$grs$`Area of model km2`, 0)
+})
+
+test_that("antimeridian_seam and unwrap_lon are invariant to a longitude shift", {
   expect_equal(unwrap_lon(fiji_lon, -1.2), c(-180.1, -179.9, -181.5, -182.5), tolerance = 1e-9)
 
   lon <- c(-84, -80, -75, 138, 140, 142); lat <- c(35, 40, 38, 35, 37, 40)
