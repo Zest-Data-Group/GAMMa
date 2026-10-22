@@ -21,6 +21,12 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   logic); hull test measures area with `terra::expanse()` instead of
   `sf::st_area()` so it no longer needs lwgeom; stale `n_buffers` fixture field
   removed. Suite is green again (T-00, audit L-11/L-12).
+- Data page: Undo Delete only restores while the dataset is still the one the
+  delete produced (a digest of the post-delete frame is kept); a GBIF gather or
+  upload after a delete greys the button out instead of being replaced by the
+  old snapshot. A Delete with nothing selected no longer overwrites the backup,
+  and Undo clears the current selection so indices cannot drift (T-02, audit
+  C-3/M-9).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 

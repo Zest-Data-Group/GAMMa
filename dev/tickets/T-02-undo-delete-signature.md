@@ -1,6 +1,6 @@
 # T-02: Undo Delete is valid only while the dataset is the one the delete produced
 
-Status: todo
+Status: done
 Branch: `fix/t02-undo-signature` (from `dev`)
 Spec: `dev/specs/critical-fixes.md` section "T-02"
 Audit: `BUG_AUDIT_2026-10-17.md` findings C-3 (critical), M-9 (medium)
@@ -60,23 +60,23 @@ selected_points = selected_points), ...)`, using `load_fixture_dataset()` from
 the helpers. Follow the patterns in `test-module_controls.R`. Read
 `session$getReturned()`-free state through the reactiveVals passed in.
 
-- [ ] Stale backup: load `Magnolia_acuminata_data_small.csv` (8 rows),
+- [x] Stale backup: load `Magnolia_acuminata_data_small.csv` (8 rows),
       `selected_points(c(1, 2))`, `setInputs(deleteSelection = 1)`: 6 rows and
       `undo_available()` TRUE (expose via `session$env` or test through the
       button's effect). Set `analysis_data()` to the 200-row
       `Magnolia_acuminata_data.csv` fixture; `setInputs(undoLastDelete = 1)`:
       `analysis_data()` still has 200 rows.
-- [ ] Empty delete: 8 rows, delete 2, `selected_points(numeric(0))`,
+- [x] Empty delete: 8 rows, delete 2, `selected_points(numeric(0))`,
       `setInputs(deleteSelection = 2)` (warning, no change), then
       `setInputs(undoLastDelete = 1)`: 8 rows restored.
-- [ ] Selection cleared on undo: 10 rows (first 10 of the 200-row fixture),
+- [x] Selection cleared on undo: 10 rows (first 10 of the 200-row fixture),
       delete index 2, `selected_points(2)`, undo: `selected_points()` has
       length 0 and the frame has 10 rows.
-- [ ] Normal path: delete 3 then undo restores all rows and the toast count is
+- [x] Normal path: delete 3 then undo restores all rows and the toast count is
       positive (capture with `shiny::showNotification` mocked, or assert on the
       row count only).
-- [ ] `Rscript tests/testthat.R` reports FAIL 0.
-- [ ] CHANGELOG.md line under Unreleased.
+- [x] `Rscript tests/testthat.R` reports FAIL 0.
+- [x] CHANGELOG.md line under Unreleased.
 
 ## Files
 
@@ -87,3 +87,26 @@ the helpers. Follow the patterns in `test-module_controls.R`. Read
 ## Notes
 
 (append here while executing)
+
+- Implemented exactly as the Change section lists; `undo_available()` is a
+  module-level reactive, so testServer reads it directly from the module env.
+- Test quirk, not a code deviation: every test calls `session$flushReact()`
+  before selecting. The DT table module's table-to-map sync observer
+  (`observeEvent(input$DT_pointsTable_rows_selected, ..., ignoreNULL = FALSE)`)
+  fires once on the session's first flush with a NULL table selection and
+  resets `selected_points()` to empty, exactly as at app start-up. A selection
+  made before that flush is wiped before Delete ever runs, so the delete was a
+  no-op and the tests could not exercise the bug. The comment in the test file
+  explains this for the next reader.
+- Red check: with the pre-ticket `R/module_data_analysis.R` swapped in, the
+  stale-backup, empty-delete and selection-cleared tests fail (6 rows instead
+  of 8 after undo; selection length 1) and the normal-path guard passes; with
+  the new module all 17 expectations pass.
+- The normal-path test captures the toast with
+  `testthat::local_mocked_bindings(showNotification = ..., .package = "shiny")`
+  and asserts "Successfully restored 3 records". It also checks that a second
+  Undo click is a no-op (single-level undo).
+- `module_controls.R` untouched.
+- Full suite on the ticket branch: `[ FAIL 0 | WARN 3 | SKIP 1 | PASS 340 ]`
+  (baseline 323 + 17 new expectations; the 3 warnings and 1 skip are the
+  pre-existing ones from the integration branch).
