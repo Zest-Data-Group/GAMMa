@@ -82,3 +82,52 @@ test_that("headers are matched ignoring case and surrounding whitespace", {
   expect_false("Extra" %in% names(merged))          # ...and are dropped by the schema gate
   expect_equal(merged$`Current Germplasm Type`, "G")
 })
+
+# --- T-01: rows whose Current Germplasm Type is not G/H are dropped at upload ---
+
+# Write a temp CSV: the 8-row small fixture plus extra rows whose germplasm type
+# is given by `types` (all with valid coordinates). Returns a fileInput-style list.
+small_fixture_plus_types <- function(types) {
+  base <- readLines(fixture_file("Magnolia_acuminata_data_small.csv")$datapath)
+  extra <- vapply(seq_along(types), function(i) sprintf(
+    '9%07d,Magnolia acuminata (L.) L.,%s,2015,%.4f,%.4f,Extra locality %d,Tester,,%d',
+    i, types[i], 36 + i * 0.1, -82 - i * 0.1, i, 300000 + i
+  ), character(1))
+  tmp <- tempfile(fileext = ".csv")
+  writeLines(c(base, extra), tmp)
+  list(name = "mixed_types.csv", datapath = tmp, size = file.size(tmp))
+}
+
+test_that("rows with a blank or unrecognised germplasm type are dropped with a warning", {
+  res <- read_upload_file(small_fixture_plus_types(c("", "X")))
+  expect_equal(res$status, "success")
+  expect_equal(nrow(res$data), 8)
+  expect_equal(res$n_dropped_type, 2)
+  expect_equal(res$message_type, "warning")
+  expect_match(res$message, "2 records")
+  expect_true(all(res$data$`Current Germplasm Type` %in% c("G", "H")))
+  expect_equal(res$data$index, seq_len(8))                      # re-indexed after the drop
+  expect_setequal(res$dropped_values, c("", "X"))
+})
+
+test_that("lower-case and padded G/H values are kept, nothing dropped", {
+  res <- read_upload_file(small_fixture_plus_types(c("g", " h ")))
+  expect_equal(res$status, "success")
+  expect_equal(nrow(res$data), 10)
+  expect_equal(res$n_dropped_type, 0)
+  expect_equal(res$dropped_values, character(0))
+  expect_equal(res$message_type, "message")
+})
+
+test_that("a file with no G or H rows at all is a validation error", {
+  tmp <- tempfile(fileext = ".csv")
+  writeLines(c(
+    "Accession Number,Taxon Name,Current Germplasm Type,Collection Date,Latitude,Longitude,Locality,Collector",
+    "A1,Quercus alba,X,2001,33.5,-84.2,Here,Someone",
+    "A2,Quercus alba,X,2002,33.6,-84.3,There,Someone"
+  ), tmp)
+  res <- read_upload_file(list(name = "all_x.csv", datapath = tmp))
+  expect_equal(res$status, "validation_error")
+  expect_null(res$data)
+  expect_match(res$message, "G or H")
+})

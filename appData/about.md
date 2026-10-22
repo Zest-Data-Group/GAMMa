@@ -37,7 +37,7 @@ This tool aims to empower collection managers to identify opportunities to incre
 ### What type of data does the tool use?
 The tool compares *ex situ* accession-level data with wild or native occurrence data from the Global Biodiversity Information Facility (GBIF) and/or uploaded by the user.
 
-* **Accession data:** Users upload their own accession data as a spreadsheet in .csv format, with this template format. The data uploaded by users is not stored in the tool, and is only held temporarily for the purpose of running the analysis.
+* **Accession data:** Users upload their own accession data as a spreadsheet in .csv format, with this template format. Every row must have a *Current Germplasm Type* of G or H; rows with a blank or any other value are dropped at upload, after confirmation. The data uploaded by users is not stored in the tool, and is only held temporarily for the purpose of running the analysis.
 * **Wild occurrence data:** Users can query an in-tool GBIF search function to retrieve occurrence records, or can upload occurrence data that has been gathered elsewhere. (Learn more about GBIF data here.)
 
 [Introduction/Explainer/Overview Video]

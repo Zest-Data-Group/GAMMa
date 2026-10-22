@@ -121,3 +121,44 @@ test_that("uploading a file loads it and a missing-column file loads nothing", {
     expect_equal(nrow(analysis_data()), 8)
   })
 })
+
+# T-01: the 8-row small fixture plus one blank-typed and one "X"-typed row,
+# both with coordinates, written to a fresh temp CSV (fileInput-style list).
+mixed_type_upload <- function() {
+  base <- readLines(fixture_file("Magnolia_acuminata_data_small.csv")$datapath)
+  extra <- c(
+    '90000001,Magnolia acuminata (L.) L.,,2015,36.1,-82.1,Extra locality 1,Tester,,300001',
+    '90000002,Magnolia acuminata (L.) L.,X,2015,36.2,-82.2,Extra locality 2,Tester,,300002'
+  )
+  tmp <- tempfile(fileext = ".csv")
+  writeLines(c(base, extra), tmp)
+  list(name = "mixed_types.csv", datapath = tmp, size = file.size(tmp))
+}
+
+test_that("uploading rows without a G/H germplasm type asks before dropping them", {
+  analysis_data <- reactiveVal(data.frame()); selected_points <- reactiveVal(numeric(0))
+  testServer(controlsModuleServer, args = list(analysis_data = analysis_data, selected_points = selected_points), {
+    # nothing changes until a modal button is clicked
+    session$setInputs(uploadData = mixed_type_upload())
+    expect_equal(nrow(analysis_data()), 0)
+    expect_null(upload_status())
+    expect_equal(pendingTypeDrop()$n_dropped_type, 2)
+
+    # Cancel: dataset untouched, status box empty, nothing pending
+    session$setInputs(cancelTypeDrop = 1)
+    expect_equal(nrow(analysis_data()), 0)
+    expect_null(upload_status())
+    expect_null(pendingTypeDrop())
+
+    # Confirm: the G/H rows load and the status box records the drop
+    session$setInputs(uploadData = mixed_type_upload())
+    expect_equal(nrow(analysis_data()), 0)
+    session$setInputs(confirmTypeDrop = 1)
+    expect_equal(nrow(analysis_data()), 8)
+    expect_true(all(analysis_data()$`Current Germplasm Type` %in% c("G", "H")))
+    expect_true(all(analysis_data()$source == "upload"))
+    expect_equal(upload_status()$type, "warning")
+    expect_match(upload_status()$text, "2 records")
+    expect_null(pendingTypeDrop())
+  })
+})

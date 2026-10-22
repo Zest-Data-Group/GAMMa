@@ -344,9 +344,14 @@ run_gap_analysis <- function(all_data, dist_km, method = c("buffer", "hull"),
   report <- function(v, d) if (is.function(progress)) progress(v, d)
   stopifnot(is.data.frame(all_data), nrow(all_data) > 0, is.numeric(dist_km), dist_km > 0)
 
+  target_col <- "Current Germplasm Type"
   data <- prep_lat_lon(all_data)
   if (nrow(data) == 0) stop("No records with valid coordinates to analyse.")
-  target_col <- "Current Germplasm Type"
+  # Safeguard (T-01, audit C-2): only G/H rows may shape the range model, GRS
+  # and the ERS universe. read_upload_file() already drops anything else, so
+  # this is a belt-and-braces filter for data that arrives by another route.
+  data <- data[data[[target_col]] %in% c("G", "H"), , drop = FALSE]
+  if (nrow(data) == 0) stop("No G or H records with valid coordinates to analyse.")
 
   report(0.1, "Calculating SRSex...")
   srsMetrics <- SRSex(taxon = NULL, occurrence_Data = all_data)

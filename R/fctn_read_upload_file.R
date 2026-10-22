@@ -83,26 +83,57 @@ read_upload_file <- function(file_info) {
         source = "upload"
       )
 
-    # D. Quality Check: Missing Coordinates
+    # D. Germplasm type gate (T-01, audit C-2)
+    # Only rows typed G or H (after trimws + toupper) take part in the analysis.
+    # Anything else (blank, "SEED", "X", ...) is dropped here so it never enters
+    # the working dataset; the caller shows a confirmation modal before committing.
+    type <- toupper(trimws(data$`Current Germplasm Type`))
+    type[is.na(type)] <- ""
+    keep <- type %in% c("G", "H")
+    n_dropped_type <- sum(!keep)
+    dropped_values <- head(unique(type[!keep]), 5)
+
+    if (n_dropped_type > 0 && !any(keep)) {
+      return(list(
+        status  = "validation_error",
+        message = "Data not loaded. No rows have a Current Germplasm Type of G or H."
+      ))
+    }
+
+    data <- data[keep, ] %>%
+      dplyr::mutate(index = dplyr::row_number())
+
+    # E. Quality Check: Missing Coordinates
     n_missing_coords <- sum(is.na(data$Latitude) | is.na(data$Longitude))
-    
+
     excel_note <- if (file_ext %in% c("xlsx", "xls")) " (first sheet only)" else ""
-    
+
     if (n_missing_coords > 0) {
       msg_type <- "warning"
-      msg_text <- paste0("Loaded ", nrow(data), " records", excel_note, ". Note: ", n_missing_coords, 
+      msg_text <- paste0("Loaded ", nrow(data), " records", excel_note, ". Note: ", n_missing_coords,
                          " records have invalid coordinates and won't appear on the map.")
     } else {
       msg_type <- "message"
       msg_text <- paste0("Successfully loaded ", nrow(data), " records", excel_note, ".")
     }
 
-    # E. Return Success
+    if (n_dropped_type > 0) {
+      msg_type <- "warning"
+      msg_text <- paste0(
+        msg_text, " ", n_dropped_type, " record", if (n_dropped_type > 1) "s" else "",
+        " with a blank or unrecognised Current Germplasm Type ",
+        if (n_dropped_type > 1) "were" else "was", " dropped."
+      )
+    }
+
+    # F. Return Success
     list(
       status = "success",
       data = data,
       message = msg_text,
-      message_type = msg_type
+      message_type = msg_type,
+      n_dropped_type = n_dropped_type,
+      dropped_values = dropped_values
     )
 
   }, error = function(e) {

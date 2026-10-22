@@ -38,18 +38,13 @@ merge_and_index <- function(current_data, new_data) {
     ) |>
     # Drop any rogue columns uploaded by the user
     dplyr::select(dplyr::all_of(expected_cols)) |>
-    dplyr::mutate(index = dplyr::row_number()) |>
-    flag_invalid_germplasm()
+    dplyr::mutate(index = dplyr::row_number())
 }
 
-# Rows whose Current Germplasm Type is not G/H are kept (they still show in the
-# tables, in grey on the map) but every gap-analysis metric ignores them. Record
-# how many there are so the UI can warn the user.
-flag_invalid_germplasm <- function(df) {
-  n <- sum(!df$`Current Germplasm Type` %in% c("G", "H"))
-  attr(df, "invalid_germplasm") <- n
-  df
-}
+# Germplasm type: rows whose Current Germplasm Type is not G or H are dropped at
+# upload by read_upload_file() (after the user confirms), and GBIF downloads
+# always assign G or H, so merge_and_index() can assume the column holds only
+# G/H values. The toupper(trimws()) above is defensive normalisation only.
 
 
 # --- Helper: status banner (#73) ---

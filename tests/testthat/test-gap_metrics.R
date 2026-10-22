@@ -158,3 +158,30 @@ test_that("convex hull method refuses degenerate inputs with a clear message", {
   expect_error(run_gap_analysis(ocean, 50, method = "hull", land = L$land, ecoRegions = L$eco), "land")
 })
 
+# T-01 (audit C-2): the pipeline only ever sees G/H rows. A row typed anything
+# else must not change the range model, GRS, ERS or the priority.
+test_that("run_gap_analysis ignores rows whose germplasm type is not G or H", {
+  d <- load_fixture_dataset("Magnolia_acuminata_data_small.csv")
+  L <- gap_layers()
+  base <- run_gap_analysis(d, 50, land = L$land, ecoRegions = L$eco)
+
+  # a far-away coordinate row with no usable type: if it were buffered it would
+  # add area to the model and a new ecoregion to the ERS universe
+  extra <- d[1, ]
+  extra$`Current Germplasm Type` <- "X"
+  extra$Latitude <- 30.3; extra$Longitude <- -97.7     # Austin TX, outside every fixture buffer
+  mixed <- merge_and_index(d, extra)
+  expect_equal(nrow(mixed), 9)
+  r <- run_gap_analysis(mixed, 50, land = L$land, ecoRegions = L$eco)
+
+  expect_equal(r$grs$`GRS exsitu`, base$grs$`GRS exsitu`, tolerance = 1e-6)
+  expect_equal(r$grs$`Area of model km2`, base$grs$`Area of model km2`, tolerance = 1e-6)
+  expect_equal(r$ers$summary, base$ers$summary, tolerance = 1e-6)
+  expect_equal(r$priority$code, base$priority$code)
+  expect_equal(nrow(r$points), 8)
+  expect_true(all(r$sf_buffers$processing_type %in% c("G", "H")))
+
+  all_x <- d; all_x$`Current Germplasm Type` <- "X"
+  expect_error(run_gap_analysis(all_x, 50, land = L$land, ecoRegions = L$eco), "No G or H")
+})
+

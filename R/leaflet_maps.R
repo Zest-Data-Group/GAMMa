@@ -205,6 +205,8 @@ render_base_points <- function(mapID, allPoints) {
         `Current Germplasm Type` == "G" & source == "GBIF" ~ gbifColor[2],
         `Current Germplasm Type` == "H" & source == "upload" ~ uploadColor[1],
         `Current Germplasm Type` == "G" & source == "upload" ~ uploadColor[2],
+        # Defensive default only: rows typed other than G/H are dropped at
+        # upload (T-01) and GBIF always assigns G or H, so this is unreachable.
         TRUE ~ "gray"
       )
     )

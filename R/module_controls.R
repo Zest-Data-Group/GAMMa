@@ -608,52 +608,18 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       div(class = paste0("upload-status upload-status--", st$type), icon(icon_name), st$text)
     })
 
-    # Notify the user when uploaded rows have a germplasm type other than G/H:
-    # they are kept in the table but excluded from every gap-analysis metric.
-    warn_invalid_germplasm <- function(df) {
-      n <- attr(df, "invalid_germplasm")
-      if (!is.null(n) && n > 0) {
-        showNotification(
-          sprintf("%d record%s have a Current Germplasm Type other than G or H and will be ignored by the gap analysis.",
-                  n, if (n > 1) "s" else ""),
-          type = "warning", duration = 10
-        )
-      }
-    }
+    # Toast durations (seconds) for the upload outcomes.
+    upload_durations <- list(validation = 8, success = 5, warning = 10, system = NULL)
 
-    observeEvent(input$uploadData, {
-      req(input$uploadData)
-      durations <- list(
-        validation = 8,
-        success = 5,
-        warning = 10,
-        system = NULL
-      )
-      res <- shiny::withProgress(
-        message = "Reading file...", value = 0.5,
-        read_upload_file(input$uploadData)
-      )
+    # A successful read whose rows without a G/H germplasm type still need the
+    # user's consent before they are dropped (T-01). Holds the read_upload_file()
+    # result until "Drop them and continue" / "Cancel upload" is clicked.
+    pendingTypeDrop <- reactiveVal(NULL)
 
-      if (res$status == "validation_error") {
-        upload_status(list(type = "error", text = res$message))
-        shinyjs::reset("uploadData")
-        showNotification(
-          res$message,
-          type = "warning",
-          duration = durations$validation
-        )
-        return()
-      }
-      if (res$status == "system_error") {
-        upload_status(list(type = "error", text = res$message))
-        shinyjs::reset("uploadData")
-        showNotification(
-          res$message,
-          type = "error",
-          duration = durations$system
-        )
-        return()
-      }
+    # Commit a successful read_upload_file() result to the working dataset:
+    # record the status, ask before overwriting an existing upload, otherwise
+    # merge and toast. Shared by the clean path and the confirmed type-drop path.
+    commit_upload <- function(res) {
       upload_status(list(type = if (res$message_type == "warning") "warning" else "success", text = res$message))
 
       new_points <- res$data
@@ -676,14 +642,80 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       } else {
         updated_df <- merge_and_index(current, new_points)
         analysis_data(updated_df)
-        warn_invalid_germplasm(updated_df)
         dur <- if (res$message_type == "warning") {
-          durations$warning
+          upload_durations$warning
         } else {
-          durations$success
+          upload_durations$success
         }
         showNotification(res$message, type = res$message_type, duration = dur)
       }
+    }
+
+    observeEvent(input$uploadData, {
+      req(input$uploadData)
+      res <- shiny::withProgress(
+        message = "Reading file...", value = 0.5,
+        read_upload_file(input$uploadData)
+      )
+
+      if (res$status == "validation_error") {
+        upload_status(list(type = "error", text = res$message))
+        shinyjs::reset("uploadData")
+        showNotification(
+          res$message,
+          type = "warning",
+          duration = upload_durations$validation
+        )
+        return()
+      }
+      if (res$status == "system_error") {
+        upload_status(list(type = "error", text = res$message))
+        shinyjs::reset("uploadData")
+        showNotification(
+          res$message,
+          type = "error",
+          duration = upload_durations$system
+        )
+        return()
+      }
+
+      # Rows without a G/H germplasm type: nothing changes until the user
+      # confirms the drop (T-01, audit C-2).
+      if (isTRUE(res$n_dropped_type > 0)) {
+        pendingTypeDrop(res)
+        n_total <- nrow(res$data) + res$n_dropped_type
+        found <- vapply(res$dropped_values, function(v) if (v == "") "blank" else sprintf('"%s"', v), character(1))
+        showModal(modalDialog(
+          title = "Records without a germplasm type",
+          sprintf(paste(
+            "%d of %d records have a blank or unrecognised Current Germplasm Type (found: %s).",
+            "Only records typed G or H are analysed, so these records will be dropped.",
+            "To include them, assign a type of G or H in your file and upload it again."
+          ), res$n_dropped_type, n_total, paste(found, collapse = ", ")),
+          footer = tagList(
+            actionButton(session$ns("cancelTypeDrop"), "Cancel upload"),
+            actionButton(session$ns("confirmTypeDrop"), "Drop them and continue", class = "btn-primary")
+          )
+        ))
+        return()
+      }
+
+      commit_upload(res)
+    })
+
+    observeEvent(input$confirmTypeDrop, {
+      req(pendingTypeDrop())
+      res <- pendingTypeDrop()
+      pendingTypeDrop(NULL)
+      removeModal()
+      commit_upload(res)
+    })
+
+    observeEvent(input$cancelTypeDrop, {
+      pendingTypeDrop(NULL)
+      shinyjs::reset("uploadData")
+      upload_status(NULL)
+      removeModal()
     })
 
     observeEvent(input$confirmloadUpload, {
@@ -695,13 +727,12 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       current_clean <- current %>% filter(source != "upload")
       updated_df <- merge_and_index(current_clean, new_points)
       analysis_data(updated_df)
-      warn_invalid_germplasm(updated_df)
 
       selected_points(numeric(0))
       uploadData_temp(NULL)
       removeModal()
 
-      dur <- if (res$message_type == "warning") 10 else 5
+      dur <- if (res$message_type == "warning") upload_durations$warning else upload_durations$success
       showNotification(res$message, type = res$message_type, duration = dur)
     })
 
@@ -762,7 +793,10 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
           tags$ul(
             tags$li(tags$strong("Accession Number")),
             tags$li(tags$strong("Taxon Name")),
-            tags$li(tags$strong("Current Germplasm Type")),
+            tags$li(
+              tags$strong("Current Germplasm Type"),
+              " - Must be G or H. Rows with any other value are dropped at upload."
+            ),
             tags$li(tags$strong("Collection Date")),
             tags$li(
               tags$strong("Latitude"),

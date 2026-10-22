@@ -1,6 +1,6 @@
 # T-01: Drop rows without a G/H germplasm type at upload, with consent
 
-Status: todo
+Status: done
 Branch: `fix/t01-germplasm-type` (from `dev`)
 Spec: `dev/specs/critical-fixes.md` section "T-01"
 Audit: `BUG_AUDIT_2026-10-17.md` finding C-2 (critical); makes M-13 moot
@@ -115,27 +115,27 @@ fixture is G/H-only (verified 2026-10-22).
 
 ## Acceptance criteria
 
-- [ ] `test-read_upload_file.R`: new test writes a temp CSV from
+- [x] `test-read_upload_file.R`: new test writes a temp CSV from
       `Magnolia_acuminata_data_small.csv` with two extra rows (one blank type,
       one "X", both with coordinates); asserts status success, `nrow == 8`,
       `n_dropped_type == 2`, `message_type == "warning"`, message matches
       "2 records", and all kept types are in G/H. A second case with "g" and
       " h " (lower case, padded) keeps both rows.
-- [ ] `test-read_upload_file.R`: a CSV whose rows are all typed "X" returns a
+- [x] `test-read_upload_file.R`: a CSV whose rows are all typed "X" returns a
       validation_error mentioning "G or H".
-- [ ] `test-gap_metrics.R`: `run_gap_analysis()` on the 8-row small fixture plus
+- [x] `test-gap_metrics.R`: `run_gap_analysis()` on the 8-row small fixture plus
       one appended non-G/H row with coordinates returns GRS, ERS, `Area of model
       km2` and priority identical to the 8-row result (tolerance 1e-6); on an
       all-"X" frame it errors with "No G or H".
-- [ ] `test-module_controls.R` (testServer, `controlsModuleServer`): uploading
+- [x] `test-module_controls.R` (testServer, `controlsModuleServer`): uploading
       the mixed fixture leaves `analysis_data()` with 0 rows and `upload_status()`
       NULL until a button is clicked; `confirmTypeDrop` loads 8 rows and the
       status text contains "2 records"; `cancelTypeDrop` leaves 0 rows and
       status NULL. A clean upload loads with no modal (existing test at line 102
       still passes).
-- [ ] `grep -rn "invalid_germplasm\|warn_invalid_germplasm" R/` returns nothing.
-- [ ] `Rscript tests/testthat.R` reports FAIL 0.
-- [ ] All six golden values in `test-gap_metrics.R` unchanged.
+- [x] `grep -rn "invalid_germplasm\|warn_invalid_germplasm" R/` returns nothing.
+- [x] `Rscript tests/testthat.R` reports FAIL 0.
+- [x] All six golden values in `test-gap_metrics.R` unchanged.
 
 ## Files
 
@@ -152,4 +152,17 @@ fixture is G/H-only (verified 2026-10-22).
 - Audit M-13 (`reportTemplate.Rmd:60,64` recodes NA types to H) becomes
   unreachable after this ticket because blanks never enter the dataset. Leave
   the report untouched here; record in CHANGELOG that M-13 is closed by this.
-(append here while executing)
+- 2026-10-22: executed test-first in three slices (parser, pipeline, module).
+  The pipeline test reproduced C-2 before the fix: one "X" row at Austin TX
+  pushed `Area of model km2` from 49,687 to 57,509 and changed ERS.
+- Deviation: `tests/testthat/test-merge_and_index.R` (not in Files) asserted
+  the `invalid_germplasm` attribute that this ticket deletes, so that test was
+  rewritten to assert normalisation only (trim + upper case, no attribute).
+- Deviation (minor): the toast `durations` list moved out of the observer into
+  a module-level `upload_durations` so `commit_upload()` and
+  `confirmloadUpload` share it; no behaviour change.
+- `R/module_gap_analysis.R:248` confirmed: `processing_type` is copied from
+  the G/H-filtered frame, so `pal_type` never sees another level. No change.
+- Final suite: `[ FAIL 0 | WARN 3 | SKIP 1 | PASS 359 ]` (baseline 323; the
+  warnings are the pre-existing terra intersect ones, the skip is the Chrome
+  UI test).

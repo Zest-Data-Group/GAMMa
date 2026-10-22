@@ -21,6 +21,11 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   logic); hull test measures area with `terra::expanse()` instead of
   `sf::st_area()` so it no longer needs lwgeom; stale `n_buffers` fixture field
   removed. Suite is green again (T-00, audit L-11/L-12).
+- Upload: rows whose Current Germplasm Type is not G or H are dropped at
+  upload after confirmation; they no longer inflate GRS/ERS (#audit C-2).
+  `run_gap_analysis()` also filters to G/H as a safeguard. Closes audit M-13
+  (report recoding blank types to H) by construction, since blanks never
+  enter the dataset (T-01).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 
