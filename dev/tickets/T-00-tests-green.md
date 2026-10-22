@@ -1,6 +1,6 @@
 # T-00: Make the test suite green
 
-Status: todo
+Status: done
 Branch: `fix/t00-tests-green` (from `dev`)
 Spec: `dev/specs/critical-fixes.md` section "T-00"
 Audit: `BUG_AUDIT_2026-10-17.md` findings L-11, L-12
@@ -42,11 +42,11 @@ Do not touch app code. Do not change any golden value.
 
 ## Acceptance criteria
 
-- [ ] `Rscript tests/testthat.R` reports FAIL 0 (expected: PASS 314 or more,
+- [x] `Rscript tests/testthat.R` reports FAIL 0 (expected: PASS 314 or more,
       SKIP 1 for the browser test, warnings may remain).
-- [ ] The hull test's assertions after line 130 now execute (temporarily break
+- [x] The hull test's assertions after line 130 now execute (temporarily break
       one to confirm, then restore).
-- [ ] No golden number in `gap_cases` changed.
+- [x] No golden number in `gap_cases` changed.
 
 ## Files
 
@@ -55,4 +55,17 @@ Do not touch app code. Do not change any golden value.
 
 ## Notes
 
-(append here while executing)
+- 2026-10-22: red confirmed first on `test-gap_metrics.R` alone:
+  `[ FAIL 3 | WARN 3 | SKIP 0 | PASS 78 ]` (the two GRS goldens and the lwgeom
+  error at the hull test).
+- Geometry stack on this machine matches the versions recorded in the header:
+  GEOS 3.12.1, GDAL 3.8.4, PROJ 9.4.0, terra 1.9.50.
+- Hull test verified live: a copy of the test with
+  `processing_type == "G"` flipped to `"H"` reports `FAIL 1 | PASS 13`, so the
+  assertions after the area line now execute (the area equality at 1e-3 passes
+  with `terra::expanse()`). Copy deleted afterwards.
+- No golden value changed; only `n_buffers` (never asserted) was removed.
+- Also touched `CHANGELOG.md` (required by the README) and this ticket file.
+- Final: `Rscript tests/testthat.R` -> `[ FAIL 0 | WARN 3 | SKIP 1 | PASS 323 ]`
+  (SKIP 1 is the browser test; the 3 warnings are the known pre-existing
+  `NAs introduced by coercion` and terra `no intersection` ones).

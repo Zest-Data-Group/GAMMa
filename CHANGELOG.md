@@ -17,6 +17,10 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   About page (#73).
 - About page restyled into sections with images, a contents list and buttons
   to the working pages (#67, #70).
+- Tests: GRS golden tolerance loosened to 1e-4 (GEOS/GDAL/PROJ drift, not app
+  logic); hull test measures area with `terra::expanse()` instead of
+  `sf::st_area()` so it no longer needs lwgeom; stale `n_buffers` fixture field
+  removed. Suite is green again (T-00, audit L-11/L-12).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 
