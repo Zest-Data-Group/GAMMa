@@ -67,16 +67,20 @@ GBIF downloads always assign G (basisOfRecord LIVING_SPECIMEN) or H
    - "Drop them and continue" commits the kept frame via the same path a
      clean upload uses (including the overwrite check if upload data already
      exists). "Cancel upload" clears the pending slot, resets the file input,
-     sets `upload_status(NULL)`, and leaves `analysis_data()` untouched.
+     and leaves both `analysis_data()` and `upload_status()` untouched (review
+     change: the pending upload never wrote to the status box, so clearing it
+     would erase a previous upload's line).
    - The dataset never changes before the click.
 3. The persistent sidebar status box (`upload_status`) records the outcome
    after the modal, for example: "Loaded 197 records. 3 records with a blank or
    unrecognised Current Germplasm Type were dropped." Its type is `warning`
    when anything was dropped. The 10-second toast for the "ignored" case is
    removed; the existing success/warning toasts for a clean upload stay.
-4. `run_gap_analysis()` (`R/gap_analysis_functions.R`, after `prep_lat_lon`)
-   filters `data` to `Current Germplasm Type %in% c("G","H")` and stops with
-   "No G or H records with valid coordinates to analyse." when nothing survives.
+4. `run_gap_analysis()` (`R/gap_analysis_functions.R`) filters `all_data` to
+   `Current Germplasm Type %in% c("G","H")` once at the top, before SRSex and
+   `prep_lat_lon`, so SRS, the records table and the metrics all see the same
+   rows (review change), and stops with "No G or H records to analyse." when
+   nothing survives.
    SRSex, GRSex, ERSex are not modified. All existing fixtures are G/H-only, so
    golden values do not move.
 5. Dead code removed: the `TRUE ~ "gray"` branch in `R/leaflet_maps.R:208`
@@ -116,7 +120,9 @@ GBIF downloads always assign G (basisOfRecord LIVING_SPECIMEN) or H
 ### Decision
 
 Undo is valid only while the live dataset is still the frame that the delete
-produced. A digest of that frame is the proof.
+produced. A reference to that frame, compared with `identical()`, is the proof
+(the original plan used `digest::digest()`; the 2026-10-22 code review replaced
+it to avoid hashing large frames on every flush and the extra dependency).
 
 ### Behaviour
 
@@ -174,8 +180,11 @@ In `R/gap_analysis_functions.R`, new pure helpers plus a change to
 2. `unwrap_lon(lon, seam)`: `ifelse(lon > seam, lon - 360, lon)`, placing every
    record in the window (seam - 360, seam]. The hull of the unwrapped points
    never crosses the seam, so it avoids the largest empty gap by construction.
-3. In `convex_hull_range()`: build the hull from the unwrapped points. If
-   `min(unwrapped) < -180` the hull crosses the antimeridian: clip against
+3. In `convex_hull_range()`: build the hull from the unwrapped points. If every
+   unwrapped longitude is <= -180 the whole set is east of the seam, so shift
+   it back by +360 (review change: avoids rotating the land layer for any
+   Eastern-hemisphere dataset). If `min(unwrapped) < -180` after that, the hull
+   crosses the antimeridian: clip against
    `terra::rotate(land_proj, longitude = seam, split = TRUE, left = TRUE)`
    (land re-wrapped so its seam is at `seam`), then bring the result back with
    `terra::rotate(out, longitude = -180, split = TRUE, left = FALSE)`.
