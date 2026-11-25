@@ -144,19 +144,21 @@ gapAnalysisServer <- function(id, analysis_data, active = shiny::reactive(TRUE))
 
     observeEvent(analysis_data(), {
       all_data <- analysis_data()
-      req(nrow(all_data) > 0)
+
+      # Clear the old markers first, whatever the new dataset holds: an empty
+      # dataset, or one with no coordinates, must not leave the previous
+      # records on the map (audit M-10).
+      proxy <- leaflet::leafletProxy("gap_map", session) %>%
+        leaflet::clearGroup("Reference Records") %>%
+        leaflet::clearGroup("Germplasm Records")
 
       # Skip the taxon filter and map all points
       data <- prep_lat_lon(all_data)
-      req(nrow(data) > 0)
+      if (nrow(data) == 0) return()
 
       col_name <- "Current Germplasm Type"
       ref_points <- data %>% dplyr::filter(.data[[col_name]] == "H")
       germ_points <- data %>% dplyr::filter(.data[[col_name]] == "G")
-
-      proxy <- leaflet::leafletProxy("gap_map", session) %>%
-        leaflet::clearGroup("Reference Records") %>%
-        leaflet::clearGroup("Germplasm Records")
 
       # The map opens on a global view; bring the records into view once the
       # page is showing (see the fit_pending observer above).
@@ -207,7 +209,10 @@ gapAnalysisServer <- function(id, analysis_data, active = shiny::reactive(TRUE))
 
     observeEvent(input$generate_buffers, {
       all_data <- analysis_data()
-      req(nrow(all_data) > 0)
+      if (nrow(all_data) == 0) {
+        showNotification("No records to analyse. Load records on the Data Analysis page first.", type = "warning")
+        return()
+      }
       dist_km <- buffer_dist_km()
       req(dist_km)
 

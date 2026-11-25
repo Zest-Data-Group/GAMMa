@@ -205,3 +205,52 @@ test_that("the standard-download summary separates requested from retrieved (L-5
     expect_true(grepl(sprintf("%d retrieved", last_gather()$steps$raw), html, fixed = TRUE))
   })
 })
+
+
+# --- T-08 (audit M-7, M-8) ---------------------------------------------------------
+
+test_that("an incomplete taxon selection resolves to NULL instead of a silent error (M-7)", {
+  mock_gbif()
+  analysis_data <- reactiveVal(data.frame()); selected_points <- reactiveVal(numeric(0))
+  testServer(controlsModuleServer, args = list(analysis_data = analysis_data, selected_points = selected_points), {
+    select_magnolia_fraseri(session)
+    expect_equal(selected_taxon_id(), 3153619)
+    # changing the species clears the rank on the client; the server sees this state
+    session$setInputs(taxon_species = "acuminata", taxon_rank = "")
+    expect_null(selected_taxon())
+    expect_null(selected_taxon_id())
+    # a click in that state does nothing harmful
+    session$setInputs(gbif_limit = 100, loadGBIF = 1)
+    expect_null(last_gather())
+    expect_equal(nrow(analysis_data()), 0)
+  })
+})
+
+test_that("cancelling a GBIF overwrite leaves the sidebar describing what is loaded (M-8)", {
+  mock_gbif()
+  analysis_data <- reactiveVal(data.frame()); selected_points <- reactiveVal(numeric(0))
+  testServer(controlsModuleServer, args = list(analysis_data = analysis_data, selected_points = selected_points), {
+    select_magnolia_fraseri(session)
+    session$setInputs(gbif_limit = 150, apply_date_filter = FALSE, exclude_inat = FALSE,
+                      include_synonyms = FALSE, reference_selection = "recent", require_name_match = TRUE)
+    session$setInputs(loadGBIF = 1)
+    first <- last_gather()
+    expect_equal(nrow(analysis_data()), 150)
+
+    session$setInputs(gbif_limit = 50)
+    session$setInputs(loadGBIF = 2)                         # asks before overwriting
+    expect_identical(last_gather(), first)                  # nothing new is loaded yet
+    expect_equal(nrow(gbifData_temp()), 50)
+    session$setInputs(cancelLoadGBIF = 1)
+    expect_null(gbifData_temp())
+    expect_null(pending_gather())
+    expect_identical(last_gather(), first)
+    expect_equal(nrow(analysis_data()), 150)
+
+    session$setInputs(loadGBIF = 3)
+    session$setInputs(confirmLoadGBIF = 1)                  # confirming promotes the new result
+    expect_equal(nrow(analysis_data()), 50)
+    expect_equal(last_gather()$steps$selected, 50)
+    expect_null(pending_gather())
+  })
+})

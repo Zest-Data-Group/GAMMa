@@ -66,6 +66,13 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   columns, an empty file, a workbook renamed .csv and a single-column file
   each get a message that says what is wrong (T-07, audit H-1, M-2, L-2, L-3,
   L-14).
+- Data page: deleting records no longer re-zooms the map; the record counter
+  clears with the dataset; the Gather button no longer stays live for a taxon
+  that stopped resolving; cancelling a GBIF overwrite leaves the sidebar
+  summary describing the records that are loaded. Gap page: record markers
+  clear when the dataset empties, and Run Gap Analysis says so when there is
+  nothing to analyse. Banner and footer icons now render (T-08, audit M-6,
+  M-7, M-8, M-10, L-7, L-8).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 

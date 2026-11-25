@@ -260,16 +260,10 @@ render_base_points <- function(mapID, allPoints) {
     )
   }
 
-  # Fit Bounds
-  if (nrow(allPoints) > 0) {
-    leafletProxy(mapID) |>
-      fitBounds(
-        lng1 = min(allPoints$Longitude, na.rm = TRUE),
-        lat1 = min(allPoints$Latitude, na.rm = TRUE),
-        lng2 = max(allPoints$Longitude, na.rm = TRUE),
-        lat2 = max(allPoints$Latitude, na.rm = TRUE)
-      )
-  }
+  # No fitBounds here: the caller (module_map.R) zooms with fit_map_to_points()
+  # only when records were added, so deleting records keeps the user's view
+  # (audit M-6; an unconditional fit here used to undo that on every redraw).
+  invisible(NULL)
 }
 
 # 3. Update Selection

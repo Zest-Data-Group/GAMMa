@@ -59,10 +59,13 @@ mapModuleServer <- function(id, analysis_data, selected_points) {
       }
       previous_n(n_now)
 
+      # Always remove the old counter first: with an empty dataset there is
+      # nothing to put back, and the previous numbers must not linger (L-7).
+      count_proxy <- leafletProxy("dataEvalMap") %>%
+        leaflet::removeControl("gbif_upload_counts")
       count_html <- map_count_control(analysis_data())
       if (!is.null(count_html)) {
-        leafletProxy("dataEvalMap") %>%
-          leaflet::removeControl("gbif_upload_counts") %>%
+        count_proxy %>%
           leaflet::addControl(
             html = count_html,
             position = "bottomleft",

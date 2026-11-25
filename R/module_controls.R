@@ -386,8 +386,13 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
 
     # 6. Resolve Target Taxon ID -------------------------------------------------------
     # Full backbone row (taxonID, canonicalName, taxonomicStatus) for the selection
+    # An incomplete selection is NULL, not req(): a silent error here cancelled
+    # the observer that enables the Gather button before it could disable it,
+    # so the button stayed live for a taxon that no longer resolved (audit M-7).
     selected_taxon <- reactive({
-      req(input$taxon_genus, input$taxon_species, input$taxon_rank)
+      if (!isTruthy(input$taxon_genus) || !isTruthy(input$taxon_species) || !isTruthy(input$taxon_rank)) {
+        return(NULL)
+      }
       query <- taxonomy_ds %>%
         filter(
           genericName == input$taxon_genus,
@@ -482,11 +487,15 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
     # 7. Gather and Format Live GBIF Data -----------------------------------------------
     # All download / filter / selection logic lives in R/gbif_functions.R.
     gbifData_temp <- reactiveVal(NULL)
+    pending_gather <- reactiveVal(NULL)   # gather result awaiting the overwrite confirmation (M-8)
     gbif_cache <- reactiveVal(NULL)   # raw pool keyed by download mode + taxon + request (see cache_key)
 
     observeEvent(input$loadGBIF, {
       tid <- selected_taxon_id()
-      req(tid)
+      if (is.null(tid)) {
+        showNotification("Select a genus, specific epithet and rank before gathering records.", type = "warning")
+        return()
+      }
 
       selection_limit <- if (is.numeric(input$gbif_limit)) input$gbif_limit else 200
       if (is.na(selection_limit) || selection_limit <= 0) {
@@ -553,7 +562,9 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
         )
         return()
       }
-      last_gather(result)
+      # last_gather() describes what is LOADED, so it is only set once the
+      # records are in the dataset: here when there is nothing to overwrite,
+      # otherwise when the overwrite is confirmed (audit M-8).
       formatted_gbif <- result$data
 
       current <- analysis_data()
@@ -561,11 +572,12 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
 
       if (has_gbif) {
         gbifData_temp(formatted_gbif)
+        pending_gather(result)
         showModal(modalDialog(
           title = "Overwrite GBIF Data?",
           "GBIF data is already loaded. Do you want to overwrite it with this new taxon?",
           footer = tagList(
-            modalButton("Cancel"),
+            actionButton(session$ns("cancelLoadGBIF"), "Cancel"),
             actionButton(
               session$ns("confirmLoadGBIF"),
               "Overwrite",
@@ -576,6 +588,7 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       } else {
         updated_df <- merge_and_index(current, formatted_gbif)
         analysis_data(updated_df)
+        last_gather(result)
         showNotification(
           sprintf("Successfully loaded %d records (%d G, %d H).", nrow(formatted_gbif), result$n_g, result$n_h),
           type = "message"
@@ -594,7 +607,9 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
         updated_df <- merge_and_index(filtered, gbifData_temp())
 
         analysis_data(updated_df)
+        if (!is.null(pending_gather())) last_gather(pending_gather())
         gbifData_temp(NULL)
+        pending_gather(NULL)
         selected_points(numeric(0))
 
         removeModal()
@@ -602,6 +617,14 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       },
       ignoreInit = TRUE
     )
+
+    # Cancel discards the downloaded records; the dataset and the sidebar
+    # summary keep describing the earlier gather.
+    observeEvent(input$cancelLoadGBIF, {
+      gbifData_temp(NULL)
+      pending_gather(NULL)
+      removeModal()
+    }, ignoreInit = TRUE)
 
     # 9. Upload file logic -------------------------------------------------------------
     uploadData_temp <- reactiveVal(NULL)

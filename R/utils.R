@@ -47,6 +47,10 @@ merge_and_index <- function(current_data, new_data) {
 # G/H values. The toupper(trimws()) above is defensive normalisation only.
 
 
+# Icons here use shiny::icon() (Font Awesome, which Shiny ships and loads).
+# Bootstrap Icons ("bi bi-*") are NOT bundled with bslib, so those classes
+# rendered as empty elements (audit L-8).
+
 # --- Helper: status banner (#73) ---
 # A dismissible Bootstrap alert placed above the page content. Copy comes from
 # landing_text$banner; the address from CONTACT_EMAIL (global.R).
@@ -57,7 +61,7 @@ app_banner_ui <- function(banner = if (exists("landing_text")) landing_text$bann
   div(
     class = "alert alert-warning alert-dismissible app-banner mb-0",
     role = "alert",
-    tags$i(class = "bi bi-info-circle-fill me-2"),
+    shiny::icon("circle-info", class = "me-2"),
     tags$span(banner$text),
     tags$span(
       class = "app-banner-contact",
@@ -66,7 +70,7 @@ app_banner_ui <- function(banner = if (exists("landing_text")) landing_text$bann
       if (!is.null(feedback)) tagList(
         " \u00b7 ",
         tags$a(href = feedback, target = "_blank", rel = "noopener noreferrer",
-               tags$i(class = "bi bi-chat-left-text me-1"), "Give feedback")
+               shiny::icon("comment", class = "me-1"), "Give feedback")
       )
     ),
     tags$button(type = "button", class = "btn-close", `data-bs-dismiss` = "alert", `aria-label` = "Close")
@@ -163,19 +167,19 @@ footer_ui <- function() {
           tags$ul(
             class = "list-unstyled",
             tags$li(
-              tags$i(class = "bi bi-envelope"),
+              shiny::icon("envelope"),
               tags$a(href = paste0("mailto:", email), paste0(" ", email), class = "footer-link")
             ),
             tags$li(
-              tags$i(class = "bi bi-github"),
+              shiny::icon("github"),
               tags$a(href = repo_url, target = "_blank", " View Source Code", class = "footer-link")
             ),
             tags$li(
-              tags$i(class = "bi bi-bug"),
+              shiny::icon("bug"),
               tags$a(href = paste0(repo_url, "/issues/new"), target = "_blank", " Report an Issue", class = "footer-link")
             ),
             if (!is.null(feedback)) tags$li(
-              tags$i(class = "bi bi-chat-left-text"),
+              shiny::icon("comment"),
               tags$a(href = feedback, target = "_blank", rel = "noopener noreferrer", " Give Feedback", class = "footer-link")
             )
           )
