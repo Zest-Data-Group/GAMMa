@@ -1,11 +1,12 @@
-# Runs the unit tests on every push / pull request. Browser (shinytest2) tests
-# are skipped on CI via skip_on_ci(); everything else runs against the exact
-# package versions in renv.lock.
+# Runs the unit tests on pushes to main and dev (day-to-day work lands on dev)
+# and on every pull request. Browser (shinytest2) tests are skipped on CI via
+# skip_on_ci(); everything else runs against the exact package versions in
+# renv.lock.
 name: tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:

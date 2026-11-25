@@ -42,7 +42,7 @@ which Shiny auto-sources before evaluating `app.R`.
 | `dev/` | Diagnostic scripts, not deployed |
 | `preprocessing/` | One-off scripts that build the static layers, not deployed |
 | `manifest.json`, `Dockerfile`, `.dockerignore` | Posit Connect git-backed deployment manifest; container image recipe and its exclusions |
-| `.github/workflows/tests.yml` | CI: runs the unit tests on push / PR |
+| `.github/workflows/tests.yml` | CI: runs the unit tests on pushes to `main` and `dev`, and on pull requests |
 
 ## Static data provenance
 
