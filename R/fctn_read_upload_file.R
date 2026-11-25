@@ -17,6 +17,59 @@ normalise_upload_headers <- function(data) {
   data
 }
 
+# --- Delimited text: what kind of file is this? ---------------------------------
+# Inspect the raw bytes before parsing so the common "Excel on Windows" exports
+# load instead of crashing later or failing with a misleading message:
+#   - encoding: valid UTF-8 is read as UTF-8, anything else as Windows-1252,
+#     which is what Excel's "CSV (Comma delimited)" writes (audit H-1). Text
+#     that is not valid UTF-8 used to pass validation and then take the session
+#     down when the map built its labels.
+#   - delimiter: comma, semicolon (Excel's default in many locales) or tab,
+#     whichever the header line uses most outside quotes (audit L-3).
+# Returns list(encoding, delim) or list(error = <message for the user>).
+sniff_delimited_file <- function(path) {
+  size <- file.size(path)
+  if (is.na(size) || size == 0) return(list(error = "Data not loaded. The file is empty."))
+  bytes <- readBin(path, "raw", n = size)
+  if (length(bytes) >= 2 && identical(bytes[1:2], as.raw(c(0x50, 0x4b)))) {
+    return(list(error = "Data not loaded. This looks like an Excel workbook saved with a .csv name. Upload it as .xlsx, or use Save As > CSV in Excel."))
+  }
+  if (any(bytes == as.raw(0))) {
+    return(list(error = "Data not loaded. The file is not plain CSV text (it may be UTF-16 \"Unicode Text\"). In Excel use Save As > CSV UTF-8."))
+  }
+  text <- rawToChar(bytes)
+  encoding <- if (validUTF8(text)) "UTF-8" else "windows-1252"
+  # Convert before any string handling: regex functions refuse invalid UTF-8.
+  text <- iconv(text, from = encoding, to = "UTF-8", sub = "")
+  lines <- strsplit(text, "\r\n|\n|\r")[[1]]
+  lines <- lines[nzchar(trimws(lines))]
+  if (length(lines) == 0) return(list(error = "Data not loaded. The file is empty."))
+  header <- gsub('"[^"]*"', "", lines[1])                            # ignore delimiters inside quotes
+  counts <- vapply(c(",", ";", "\t"), function(d) lengths(regmatches(header, gregexpr(d, header, fixed = TRUE))), integer(1))
+  if (max(counts) == 0) {
+    return(list(error = "Data not loaded. The file parsed as a single column. Check that it is comma-, semicolon- or tab-delimited."))
+  }
+  list(encoding = encoding, delim = names(counts)[which.max(counts)])   # ties go to the comma
+}
+
+# Excel: read_excel(col_types = "text") returns a genuine date cell as its
+# serial number ("40769" for 2011-08-14), which then showed in the table, the
+# popups, the report and the export (audit M-2). Read the sheet a second time
+# with typed cells and, in the Collection Date column only, replace date cells
+# with an ISO date. Every other cell keeps its text reading.
+restore_excel_dates <- function(data, path) {
+  i <- which(tolower(gsub("\\s+", " ", trimws(names(data)))) == "collection date")
+  if (length(i) != 1 || nrow(data) == 0) return(data)
+  typed <- tryCatch(readxl::read_excel(path, sheet = 1, col_types = "list"), error = function(e) NULL)
+  if (is.null(typed) || nrow(typed) != nrow(data) || ncol(typed) < i) return(data)
+  cells <- typed[[i]]
+  is_date <- vapply(cells, function(x) inherits(x, c("POSIXt", "Date")) && length(x) == 1 && !is.na(x), logical(1))
+  if (any(is_date)) {
+    data[[i]][is_date] <- vapply(cells[is_date], function(x) format(as.Date(x), "%Y-%m-%d"), character(1))
+  }
+  data
+}
+
 read_upload_file <- function(file_info) {
   
   # --- 1. Validation: File Extension ---
@@ -32,11 +85,23 @@ read_upload_file <- function(file_info) {
   tryCatch({
     
     # A. Read File (All columns as text initially)
+    delim <- ","
     if (file_ext == "csv") {
-      data <- readr::read_csv(
-        file_info$datapath, 
-        col_types = readr::cols(.default = "c")
+      kind <- sniff_delimited_file(file_info$datapath)
+      if (!is.null(kind$error)) {
+        return(list(status = "validation_error", message = kind$error))
+      }
+      delim <- kind$delim
+      data <- readr::read_delim(
+        file_info$datapath,
+        delim = delim,
+        col_types = readr::cols(.default = "c"),
+        locale = readr::locale(encoding = kind$encoding),
+        trim_ws = TRUE,
+        progress = FALSE
       )
+      # Belt and braces: nothing that is not valid UTF-8 leaves this function.
+      data[] <- lapply(data, function(x) if (is.character(x)) iconv(x, from = "UTF-8", to = "UTF-8", sub = "") else x)
     } else {
       # Excel: read first sheet only, coerce all columns to character
       data <- readxl::read_excel(
@@ -44,12 +109,24 @@ read_upload_file <- function(file_info) {
         sheet = 1,
         col_types = "text"
       )
+      data <- restore_excel_dates(data, file_info$datapath)
     }
 
     # B. Validation: Required Columns
     # Headers are matched ignoring case and surrounding whitespace (a very common
     # spreadsheet export problem) and renamed to the canonical spelling.
     data <- normalise_upload_headers(data)
+    # Two headers that differ only in case or spacing ("Latitude", "latitude")
+    # now carry the same name; say which, instead of failing later with
+    # "duplicate names" (audit L-2).
+    dup_cols <- intersect(unique(names(data)[duplicated(names(data))]), UPLOAD_KNOWN_COLS)
+    if (length(dup_cols) > 0) {
+      return(list(
+        status  = "validation_error",
+        message = paste0("Data not loaded. These columns appear more than once (header names are matched ignoring case and spaces): ",
+                         paste(dup_cols, collapse = ", "), ". Remove or rename the extra column.")
+      ))
+    }
     required_cols <- c(
       "Accession Number", "Taxon Name", "Current Germplasm Type",
       "Collection Date", "Locality", "Collector"
@@ -71,6 +148,10 @@ read_upload_file <- function(file_info) {
         Latitude  = if ("Latitude" %in% names(.)) Latitude else NA_character_,
         Longitude = if ("Longitude" %in% names(.)) Longitude else NA_character_,
         
+        # A semicolon-delimited file comes from a locale that writes 33,5
+        Latitude  = if (delim == ";") sub(",", ".", Latitude, fixed = TRUE) else Latitude,
+        Longitude = if (delim == ";") sub(",", ".", Longitude, fixed = TRUE) else Longitude,
+
         # Coerce to numeric
         Latitude  = suppressWarnings(as.numeric(Latitude)),
         Longitude = suppressWarnings(as.numeric(Longitude)),

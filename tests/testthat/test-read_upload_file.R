@@ -144,3 +144,113 @@ test_that("a file with no G or H rows at all is a validation error", {
   expect_null(res$data)
   expect_match(res$message, "G or H")
 })
+
+
+# --- T-07 (audit H-1, M-2, L-2, L-3, L-14) --------------------------------------------
+
+# A fileInput-style list for a temp file written from raw bytes or lines.
+temp_upload <- function(lines = NULL, bytes = NULL, name = "upload.csv") {
+  tmp <- tempfile(fileext = paste0(".", tools::file_ext(name)))
+  if (!is.null(bytes)) writeBin(bytes, tmp) else writeLines(lines, tmp, useBytes = TRUE)
+  list(name = name, datapath = tmp, size = file.size(tmp))
+}
+UPLOAD_HEADER <- "Accession Number,Taxon Name,Current Germplasm Type,Collection Date,Latitude,Longitude,Locality,Collector"
+
+test_that("a Windows-1252 CSV loads as valid UTF-8 instead of crashing the map (H-1)", {
+  # "Caf\xe9 Ni\xf1o" as Excel's "CSV (Comma delimited)" writes it on Windows
+  row <- c(charToRaw("A1,Quercus alba,G,2001-01-01,33.5,-84.2,Caf"), as.raw(0xe9),
+           charToRaw(" Ni"), as.raw(0xf1), charToRaw("o,Someone"))
+  res <- read_upload_file(temp_upload(bytes = c(charToRaw(paste0(UPLOAD_HEADER, "\n")), row, charToRaw("\n"))))
+  expect_equal(res$status, "success")
+  expect_equal(res$data$Locality, "Caf\u00e9 Ni\u00f1o")
+  chr <- unlist(res$data[vapply(res$data, is.character, logical(1))])
+  expect_true(all(validUTF8(chr[!is.na(chr)])))
+  # the two calls that used to throw "invalid multibyte string"
+  d <- merge_and_index(data.frame(), res$data)
+  expect_no_error(point_labels(d))
+})
+
+test_that("a UTF-8 CSV, with or without a byte-order mark, is read unchanged (H-1)", {
+  line <- "A1,Quercus alba,G,2001-01-01,33.5,-84.2,Caf\u00e9 Ni\u00f1o,Someone"
+  plain <- read_upload_file(temp_upload(bytes = charToRaw(enc2utf8(paste0(UPLOAD_HEADER, "\n", line, "\n")))))
+  expect_equal(plain$data$Locality, "Caf\u00e9 Ni\u00f1o")
+  bom <- read_upload_file(temp_upload(bytes = c(as.raw(c(0xef, 0xbb, 0xbf)), charToRaw(enc2utf8(paste0(UPLOAD_HEADER, "\n", line, "\n"))))))
+  expect_equal(bom$status, "success")
+  expect_equal(bom$data$Locality, "Caf\u00e9 Ni\u00f1o")
+  expect_equal(bom$data$`Accession Number`, "A1")
+})
+
+test_that("Excel date cells in Collection Date come through as dates, not serial numbers (M-2)", {
+  path <- fixture_path("upload_excel_date_cells.xlsx")
+  res <- read_upload_file(list(name = "dates.xlsx", datapath = path, size = file.size(path)))
+  expect_equal(res$status, "success")
+  expect_equal(res$data$`Collection Date`, c("2011-08-14", "2011-08-03", "2011"))   # text cell untouched
+  expect_equal(res$data$Latitude, c(35.70725, 35.140667, 35.2))
+  expect_equal(res$data$`Accession Number`[1], "574679236")
+  # the existing all-text workbook is unaffected
+  old <- read_upload_file(fixture_file("upload_sample_manual_properly_formatted_excel.xlsx"))
+  expect_equal(nrow(old$data), 200)
+  expect_false(any(grepl("^[0-9]{5}$", old$data$`Collection Date`)))
+})
+
+test_that("headers that collapse to the same column are reported by name (L-2)", {
+  res <- read_upload_file(temp_upload(c(
+    paste0(UPLOAD_HEADER, ",latitude"),
+    "A1,Quercus alba,G,2001-01-01,33.5,-84.2,Somewhere,Someone,33.5")))
+  expect_equal(res$status, "validation_error")
+  expect_match(res$message, "Latitude")
+  expect_match(res$message, "more than once", fixed = TRUE)
+})
+
+test_that("semicolon- and tab-delimited files load (L-3)", {
+  semi <- read_upload_file(temp_upload(c(
+    gsub(",", ";", UPLOAD_HEADER),
+    "A1;Quercus alba;G;2001-01-01;33,5;-84,2;Somewhere, near the river;Someone",
+    "A2;Quercus alba;H;2001-01-02;34.5;-85.2;Elsewhere;Someone")))
+  expect_equal(semi$status, "success")
+  expect_equal(nrow(semi$data), 2)
+  expect_equal(semi$data$Latitude, c(33.5, 34.5))          # decimal comma accepted
+  expect_equal(semi$data$Longitude, c(-84.2, -85.2))
+  expect_equal(semi$data$Locality[1], "Somewhere, near the river")
+
+  tab <- read_upload_file(temp_upload(c(
+    gsub(",", "\t", UPLOAD_HEADER),
+    "A1\tQuercus alba\tG\t2001-01-01\t33.5\t-84.2\tSomewhere\tSomeone")))
+  expect_equal(tab$status, "success")
+  expect_equal(tab$data$Latitude, 33.5)
+
+  # a comma file whose text fields contain semicolons is still a comma file
+  comma <- read_upload_file(temp_upload(c(
+    UPLOAD_HEADER, 'A1,Quercus alba,G,2001-01-01,33.5,-84.2,"a; b; c; d; e; f; g; h; i",Someone')))
+  expect_equal(comma$status, "success")
+  expect_equal(comma$data$Locality, "a; b; c; d; e; f; g; h; i")
+})
+
+test_that("files that are not a delimited table get a specific message (L-3)", {
+  xlsx <- fixture_file("upload_sample_manual_properly_formatted_excel.xlsx")
+  renamed <- read_upload_file(list(name = "really_excel.csv", datapath = xlsx$datapath))
+  expect_equal(renamed$status, "validation_error")
+  expect_match(renamed$message, "Excel")
+
+  empty <- read_upload_file(temp_upload(character(0)))
+  expect_equal(empty$status, "validation_error")
+  expect_match(empty$message, "empty")
+
+  one_col <- read_upload_file(temp_upload(c("just one column", "value")))
+  expect_equal(one_col$status, "validation_error")
+  expect_match(one_col$message, "single column")
+})
+
+test_that("a missing Latitude column and a missing Longitude column are each filled with NA (L-14)", {
+  base <- readr::read_csv(fixture_file("upload_sample_small.csv")$datapath, col_types = readr::cols(.default = "c"))
+  no_lat <- tempfile(fileext = ".csv"); readr::write_csv(base[, names(base) != "Latitude"], no_lat)
+  res <- read_upload_file(list(name = "no_lat.csv", datapath = no_lat))
+  expect_equal(res$status, "success")
+  expect_true(all(is.na(res$data$Latitude)))
+  expect_false(all(is.na(res$data$Longitude)))
+
+  # the workbook fixture named "..._missing_lat" actually lacks Longitude
+  res2 <- read_upload_file(fixture_file("upload_sample_manual_properly_formatted_excel_missing_lat.xlsx"))
+  expect_true(all(is.na(res2$data$Longitude)))
+  expect_false(all(is.na(res2$data$Latitude)))
+})

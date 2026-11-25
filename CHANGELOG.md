@@ -59,6 +59,13 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   the method and one per year is taken from that order. The sidebar summary
   shows records requested and retrieved separately, and Max Occurrences
   starts at 50 (T-06, audit M-3, M-4, M-5, L-5, L-6, L-13).
+- Upload: CSV files saved by Excel on Windows (Windows-1252) load with their
+  accented characters instead of disconnecting the session. Semicolon- and
+  tab-delimited files load, including decimal commas in coordinates. Excel
+  date cells in Collection Date show as dates, not serial numbers. Duplicate
+  columns, an empty file, a workbook renamed .csv and a single-column file
+  each get a message that says what is wrong (T-07, audit H-1, M-2, L-2, L-3,
+  L-14).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 

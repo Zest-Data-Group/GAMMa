@@ -833,6 +833,9 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
                 "Do not include additional columns beyond those listed above."
               ),
               tags$li(
+                "CSV files may be comma-, semicolon- or tab-delimited. Excel files are read from the first sheet."
+              ),
+              tags$li(
                 "If you do not provide coordinates (Latitude/Longitude), your data will still be included in the analysis but will not appear on the map."
               )
             )
