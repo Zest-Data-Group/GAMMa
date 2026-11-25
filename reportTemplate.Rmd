@@ -1,6 +1,6 @@
 ---
 title: "*Ex situ* conservation gap analysis summary"
-subtitle: "`{r} params$taxon`"
+subtitle: "`{r} htmltools::htmlEscape(params$taxon)`"
 author: "Generated with GAMMa (Gap Analysis &amp; Metacollection Management) v`{r} params$app_version`"
 date: "`{r} format(Sys.time(), '%B %d, %Y')`"
 output:
@@ -57,11 +57,9 @@ buffer_km <- params$bufferDist
 # Rows analysed spatially (have coordinates) and the full working dataset
 points  <- params$points
 col_name <- "Current Germplasm Type"
-points[[col_name]] <- tidyr::replace_na(points[[col_name]], "H")
 records <- if (is.data.frame(params$records) && nrow(params$records) > 0) params$records else points
 if (!"source" %in% names(records)) records$source <- "unknown"
 if (!"source" %in% names(points))  points$source  <- "unknown"
-records[[col_name]] <- tidyr::replace_na(records[[col_name]], "H")
 
 g_points <- points %>% filter(.data[[col_name]] == "G")
 h_points <- points %>% filter(.data[[col_name]] == "H")
@@ -168,7 +166,7 @@ ggplot(df_plot, aes(Metric, Score)) +
 
 `{r} if (method == "Convex hull") paste0("The wild range was estimated as the **convex hull** of all records with coordinates, clipped to land, and is drawn as a dashed outline. Germplasm (G) records were buffered by ", buffer_km, " km within that range to estimate the area already collected.") else paste0("The wild range was estimated with the **buffer method**: a ", buffer_km, " km buffer around every record with coordinates, clipped to land. The buffers around germplasm (G) records estimate the area already collected.")`
 
-The **GRS gap** layer shows the part of the estimated range that lies farther than `{r} buffer_km` km from any germplasm record. The **ERS regions** layer shows the ecoregions occupied by the range, coloured by whether they overlap a germplasm buffer (covered) or not (gap). Records can be clicked for their attributes; layers can be toggled with the control in the top right, and the global protected-area layer (World Database on Protected Areas) can be switched on to see where collecting permits may be required.
+The **GRS gap** layer shows the part of the estimated range that lies farther than `{r} buffer_km` km from any germplasm record. The **ERS regions** layer shows the ecoregions containing at least one analysed record, coloured by whether they overlap a germplasm buffer (covered) or not (gap). Records can be clicked for their attributes; layers can be toggled with the control in the top right, and the global protected-area layer (World Database on Protected Areas) can be switched on to see where collecting permits may be required.
 
 ```{r map, results='asis'}
 m <- leaflet(width = "100%", height = 560) %>%
@@ -199,7 +197,7 @@ if (!is.null(params$sf_model) && inherits(params$sf_model, "sf") && nrow(params$
 
 if (!is.null(params$sf_buffers) && inherits(params$sf_buffers, "sf") && nrow(params$sf_buffers) > 0) {
   buffers_simplified <- rmapshaper::ms_simplify(params$sf_buffers, keep = 0.3, keep_shapes = TRUE)
-  pal_type <- colorFactor(c("H" = combinedColor[1], "G" = combinedColor[2]), domain = c("H", "G"))
+  pal_type <- gap_type_palette()   # shared with the app (R/leaflet_maps.R)
   m <- m %>% addPolygons(
     data = buffers_simplified, group = "Buffers",
     color = pal_type(buffers_simplified$processing_type),
@@ -221,7 +219,7 @@ if (!is.null(params$sf_grs_gap) && inherits(params$sf_grs_gap, "sf")) {
 
 if (!is.null(params$sf_ers_regions) && inherits(params$sf_ers_regions, "sf")) {
   ers_regions_simplified <- rmapshaper::ms_simplify(params$sf_ers_regions, keep = 0.3, keep_shapes = TRUE)
-  pal_ers <- colorFactor(c("Covered" = ersexColors[1], "Gap Ecoregion" = ersexColors[2]), domain = c("Covered", "Gap Ecoregion"))
+  pal_ers <- gap_ers_palette()     # shared with the app (R/leaflet_maps.R)
   m <- m %>% addPolygons(
     data = ers_regions_simplified, group = "ERS regions",
     color = "black", fillColor = ~pal_ers(gap_status),
@@ -233,7 +231,7 @@ if (!is.null(params$sf_ers_regions) && inherits(params$sf_ers_regions, "sf")) {
 gen_popup <- function(data) {
   paste0(
     "<strong>", htmlEscape(as.character(data$`Taxon Name`)), "</strong>",
-    "<br/><b>Type:</b> ", data[[col_name]], " &nbsp; <b>Source:</b> ", data$source,
+    "<br/><b>Type:</b> ", htmlEscape(as.character(data[[col_name]])), " &nbsp; <b>Source:</b> ", htmlEscape(as.character(data$source)),
     if ("Accession Number" %in% names(data)) paste0("<br/><b>Accession:</b> ", htmlEscape(as.character(data$`Accession Number`))) else "",
     if ("Collection Date" %in% names(data)) paste0("<br/><b>Date:</b> ", htmlEscape(as.character(data$`Collection Date`))) else "",
     "<br/><b>Collector:</b> ", htmlEscape(as.character(data$Collector)),
@@ -275,7 +273,7 @@ report_widget(m)
 
 ## *Ex situ* conservation ecoregions table
 
-All terrestrial ecoregions occupied by the estimated range of the taxon. **Gap ecoregion** is *true* when the ecoregion overlaps the range but lies farther than `{r} buffer_km` km from any germplasm record, i.e. it is not represented in *ex situ* collections. The record counts are the analysed records (with coordinates) falling inside each ecoregion.
+All terrestrial ecoregions containing at least one analysed record of the taxon. **Gap ecoregion** is *true* when the ecoregion holds a record but lies farther than `{r} buffer_km` km from any germplasm record, i.e. it is not represented in *ex situ* collections. The record counts are the analysed records (with coordinates) falling inside each ecoregion.
 
 ```{r ecoregions-table, results='asis'}
 if (!is.null(params$sf_ers_regions) && inherits(params$sf_ers_regions, "sf") && nrow(params$sf_ers_regions) > 0) {
@@ -312,11 +310,16 @@ if (!is.null(params$sf_ers_regions) && inherits(params$sf_ers_regions, "sf") && 
 Every record with coordinates that entered the spatial analysis. GBIF accession numbers link to the occurrence page on gbif.org.
 
 ```{r records-table, results='asis'}
+# The table is rendered with escape = FALSE so the GBIF link works, so every
+# text column is escaped here first (uploaded text must never be live markup).
 rec <- points %>%
+  mutate(across(where(is.character), ~ htmltools::htmlEscape(.x))) %>%
   mutate(
     `Accession Number` = ifelse(source == "GBIF" & !is.na(`Accession Number`),
-      sprintf('<a href="https://www.gbif.org/occurrence/%s" target="_blank">%s</a>', `Accession Number`, `Accession Number`),
-      as.character(`Accession Number`)),
+      sprintf('<a href="https://www.gbif.org/occurrence/%s" target="_blank">%s</a>',
+              vapply(`Accession Number`, utils::URLencode, character(1), reserved = TRUE, USE.NAMES = FALSE),
+              `Accession Number`),
+      `Accession Number`),
     Latitude = round(Latitude, 4), Longitude = round(Longitude, 4)
   ) %>%
   select(any_of(c("Accession Number", "Taxon Name", "Current Germplasm Type", "source", "Collection Date",
@@ -339,11 +342,11 @@ Buffers of `{r} buffer_km` km are created around each G record to estimate the g
 
 ### Ecological Representativeness Score (ERS *ex situ*)
 
-The proportion of terrestrial ecoregions represented within the G buffers out of the total number of ecoregions occupied by the estimated range. Ecoregions follow Olson et al. (2001), 814 terrestrial ecoregions worldwide.
+The proportion of terrestrial ecoregions represented within the G buffers out of the total number of ecoregions containing at least one analysed record. Ecoregions follow Olson et al. (2001), 814 terrestrial ecoregions worldwide.
 
 ### Final Conservation Score (FCS *ex situ*)
 
-The average of the three *ex situ* scores. Taxa are categorised as **Urgent Priority (UP)** for further conservation action when FCS < 25, **High Priority (HP)** when 25 ≤ FCS < 50, **Medium Priority (MP)** when 50 ≤ FCS < 75, and **Low Priority (LP)** when FCS ≥ 75.
+The average of the three *ex situ* scores. Taxa are categorised as **Urgent Priority (UP)** for further conservation action when FCS ≤ 25, **High Priority (HP)** when 25 < FCS ≤ 50, **Medium Priority (MP)** when 50 < FCS ≤ 75, and **Low Priority (LP)** when FCS > 75.
 
 # Definitions of occurrence data categories
 

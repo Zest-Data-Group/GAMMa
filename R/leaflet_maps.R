@@ -14,6 +14,19 @@ grsexColor <- c("#ef8a62")
 # Ers gaps
 ersexColors <- c("#8ae6c7", "#728587")
 
+# The two categorical palettes of the gap map, shared by the app
+# (module_gap_analysis.R) and the report (reportTemplate.Rmd). Define them
+# nowhere else. leaflet::colorFactor() ignores the names of a palette vector
+# and, without `levels`, takes the levels from the data in sorted order, so a
+# named vector or a data-derived domain silently swaps or blends the colours
+# (audit M-11, M-14). Fixed levels with a positional palette avoid both.
+gap_type_palette <- function() {
+  leaflet::colorFactor(palette = c(combinedColor[1], combinedColor[2]), levels = c("H", "G"))
+}
+gap_ers_palette <- function() {
+  leaflet::colorFactor(palette = c(ersexColors[1], ersexColors[2]), levels = c("Covered", "Gap Ecoregion"))
+}
+
 
 # --- Legend Shapes Helper ---
 # Creates CSS strings for custom legend markers

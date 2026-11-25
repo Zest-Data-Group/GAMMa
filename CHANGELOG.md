@@ -41,6 +41,16 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   wrong way round with G area 0 and GRS 0 (audit C-1, T-03). The hull is still
   drawn in lon/lat; a geodesic (projected) hull is a possible later
   improvement.
+- Report: germplasm and reference buffers are drawn in their own colours (they
+  were swapped against the legend); the gap-map palettes are now defined once
+  and shared by the app and the report, which also stops the app painting a
+  single-status ERS result in a blended colour. Uploaded text (taxon name,
+  locality, collector, accession number) is escaped in the subtitle, the
+  scores table, the popups and the records table. The priority cut-offs in
+  the Definitions now match the categories the report prints (UP ≤ 25, HP ≤ 50,
+  MP ≤ 75), and the report and About page describe the ERS denominator as the
+  ecoregions containing at least one analysed record, which is what the
+  score counts (T-05, audit M-11, M-12, M-14, L-9, L-10).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 

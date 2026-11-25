@@ -22,7 +22,8 @@ report_widget <- function(widget) {
   invisible(NULL)
 }
 
-# A plain HTML table for the report. `bold_rows` are rendered bold; `cell_bg`
+# A plain HTML table for the report (use in a chunk with results = 'asis').
+# `bold_rows` are rendered bold; `cell_bg`
 # (list(col = , color = )) shades one column, e.g. the priority category.
 report_table <- function(df, bold_rows = integer(0), cell_bg = NULL, big_mark = ",") {
   df <- as.data.frame(df, check.names = FALSE)
@@ -36,7 +37,11 @@ report_table <- function(df, bold_rows = integer(0), cell_bg = NULL, big_mark = 
     if (length(bold_rows)) v[bold_rows] <- paste0("<b>", v[bold_rows], "</b>")
     df[[j]] <- v
   }
-  knitr::kable(df, format = "html", escape = FALSE, table.attr = 'class="table"')
+  # Written with cat() (the calling chunks are results = 'asis') rather than
+  # returned: litedown decodes the entities of a returned knitr_kable, which
+  # turned the escaped cells back into live markup (audit M-12).
+  cat(as.character(knitr::kable(df, format = "html", escape = FALSE, table.attr = 'class="table"')), "\n")
+  invisible(NULL)
 }
 
 mime_for <- function(path) {

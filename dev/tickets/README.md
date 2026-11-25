@@ -14,6 +14,7 @@ Status line in the ticket file and append to its Notes section as you go.
 | [T-02 Undo Delete validity](T-02-undo-delete-signature.md) | C-3, M-9 | `fix/t02-undo-signature` | done |
 | [T-03 Antimeridian convex hull](T-03-antimeridian-hull.md) | C-1 | `fix/t03-antimeridian-hull` | done |
 | [T-04 Hull G area vs geodesic expanse](T-04-hull-geodesic-area.md) | found in T-03, not in audit | `fix/t04-hull-geodesic-area` | todo (needs grilling) |
+| [T-05 Report correctness](T-05-report-correctness.md) | M-11, M-12, M-14, L-9, L-10 | `fix/t05-report-correctness` | done |
 
 ## Executing a ticket (for an agent)
 

@@ -239,10 +239,7 @@ gapAnalysisServer <- function(id, analysis_data, active = shiny::reactive(TRUE))
       }
 
       if (nrow(res$sf_buffers) > 0) {
-        pal_type <- leaflet::colorFactor(
-          palette = c(combinedColor[1], combinedColor[2]),
-          levels = c("H", "G")
-        )
+        pal_type <- gap_type_palette()
 
         proxy %>% leaflet::addPolygons(
           data = res$sf_buffers,
@@ -264,7 +261,7 @@ gapAnalysisServer <- function(id, analysis_data, active = shiny::reactive(TRUE))
       }
 
       if (!is.null(res$sf_ers_regions)) {
-        pal_ers <- leaflet::colorFactor(c(ersexColors[1], ersexColors[2]), domain = res$sf_ers_regions$gap_status)
+        pal_ers <- gap_ers_palette()
         proxy %>% leaflet::addPolygons(
           data = res$sf_ers_regions, group = "ERS Regions", color = "black", fillColor = ~ pal_ers(gap_status),
           fillOpacity = 0.3, weight = 2, options = leaflet::pathOptions(pane = "buffers"),

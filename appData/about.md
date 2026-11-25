@@ -61,7 +61,7 @@ Using the input data, the gap analysis tool produces three *ex situ* conservatio
 
 * **The Sampling Representativeness Score ex situ (SRS ex situ)** calculates the ratio of germplasm accessions (G) available in *ex situ* repositories to reference/voucher (H) records for each taxon, making use of all compiled records irrespective of whether they include coordinates. If there are more G than H records, SRS ex situ is set to the maximum score of 100.
 * **The Geographic Representativeness Score ex situ (GRS ex situ)** uses user-defined buffers created around each G collection coordinate point to estimate geographic areas collected within the estimated range of each taxon and then calculates the proportion of the range covered by these buffers.
-* **The Ecological Representativeness Score ex situ (ERS ex situ)** calculates the proportion of terrestrial ecoregions represented within the G buffered areas out of the total number of ecoregions occupied by the potential range. The layer used for estimating the ERS ex situ contains 814 distinct terrestrial ecoregions worldwide (Olson et al., 2001).
+* **The Ecological Representativeness Score ex situ (ERS ex situ)** calculates the proportion of terrestrial ecoregions represented within the G buffered areas out of the total number of ecoregions containing at least one analysed record. The layer used for estimating the ERS ex situ contains 814 distinct terrestrial ecoregions worldwide (Olson et al., 2001).
 * **The Final Conservation Score ex situ (FCS ex situ)** is derived by calculating the average of the three *ex situ* conservation metrics.
 
 ### Interpreting the Final Conservation Score ex situ (FCS ex situ):
