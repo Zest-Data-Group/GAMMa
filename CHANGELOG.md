@@ -51,6 +51,14 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   MP ≤ 75), and the report and About page describe the ERS denominator as the
   ecoregions containing at least one analysed record, which is what the
   score counts (T-05, audit M-11, M-12, M-14, L-9, L-10).
+- GBIF: every request now times out (60 s, or 20 s without data) instead of
+  hanging the app for all users. "Include taxonomic synonyms" works while the
+  scientific-name check is on: a record filed under a synonym is kept when
+  GBIF resolves it to the selected taxon (#52). A date filter no longer
+  replaces the chosen reference-selection method; the records are ordered by
+  the method and one per year is taken from that order. The sidebar summary
+  shows records requested and retrieved separately, and Max Occurrences
+  starts at 50 (T-06, audit M-3, M-4, M-5, L-5, L-6, L-13).
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 

@@ -15,6 +15,7 @@ Status line in the ticket file and append to its Notes section as you go.
 | [T-03 Antimeridian convex hull](T-03-antimeridian-hull.md) | C-1 | `fix/t03-antimeridian-hull` | done |
 | [T-04 Hull G area vs geodesic expanse](T-04-hull-geodesic-area.md) | found in T-03, not in audit | `fix/t04-hull-geodesic-area` | todo (needs grilling) |
 | [T-05 Report correctness](T-05-report-correctness.md) | M-11, M-12, M-14, L-9, L-10 | `fix/t05-report-correctness` | done |
+| [T-06 GBIF pipeline](T-06-gbif-pipeline.md) | M-3, M-4, M-5, L-5, L-6, L-13 | `fix/t06-gbif-pipeline` | done |
 
 ## Executing a ticket (for an agent)
 

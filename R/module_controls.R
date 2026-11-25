@@ -57,7 +57,7 @@ controlsModuleUI <- function(id) {
           sliderInput(
             ns("gbif_limit"),
             "Max Occurrences",
-            min = 0,
+            min = 50,   # 0 made the download return nothing with a misleading message (audit L-6)
             max = 1000,
             value = 200,
             step = 50,
@@ -177,7 +177,7 @@ controlsModuleUI <- function(id) {
                     "Include taxonomic synonyms",
                     value = FALSE # FALSE means synonyms are excluded by default
                   ),
-                  "Toggle to bring \"accepted synonyms\" back into the pull. When unchecked (default), synonyms are removed and you may need to adjust the download size to get the correct number of features. Does not change how the download is made."
+                  "Also keep records GBIF filed under a synonym of the selected taxon (a name GBIF resolves to it). When unchecked (default) only records under the accepted name are kept. Works with or without the scientific name check. Does not change how the download is made."
                 )
               )
             )
@@ -464,9 +464,11 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
           tags$div(
             class = "text-success mt-1",
             if (identical(loaded$mode, "standard")) {
-              sprintf("Loaded: %s G / %s H (standard download, %s records requested)",
+              # requested = the slider; retrieved = what GBIF returned after the
+              # name checks, which is fewer when GBIF runs out (audit L-5)
+              sprintf("Loaded: %s G / %s H (standard download, %s records requested, %s retrieved)",
                       format_count(loaded$n_g), format_count(loaded$n_h),
-                      format_count(loaded$steps$raw))
+                      format_count(loaded$limit), format_count(loaded$steps$raw))
             } else {
               sprintf("Loaded: %s G / %s H (advanced download, from %s records after filters)",
                       format_count(loaded$n_g), format_count(loaded$n_h),
@@ -487,6 +489,10 @@ controlsModuleServer <- function(id, analysis_data, selected_points) {
       req(tid)
 
       selection_limit <- if (is.numeric(input$gbif_limit)) input$gbif_limit else 200
+      if (is.na(selection_limit) || selection_limit <= 0) {
+        showNotification("Set Max Occurrences above 0 to download records.", type = "warning")
+        return()
+      }
       date_range <- active_date_range()
       method <- if (is.null(input$reference_selection)) "gbif" else input$reference_selection
       standard <- gbif_is_standard_request(isTRUE(input$exclude_inat), date_range, method)

@@ -172,3 +172,36 @@ test_that("uploading rows without a G/H germplasm type asks before dropping them
     expect_null(pendingTypeDrop())
   })
 })
+
+
+# --- T-06 (audit L-5, L-6) ---------------------------------------------------------
+
+test_that("the Max Occurrences slider cannot be set to zero and a zero request is refused (L-6)", {
+  ui <- as.character(controlsModuleUI("x"))
+  expect_true(grepl('data-min="50"', ui, fixed = TRUE))
+  mock_gbif()
+  analysis_data <- reactiveVal(data.frame()); selected_points <- reactiveVal(numeric(0))
+  testServer(controlsModuleServer, args = list(analysis_data = analysis_data, selected_points = selected_points), {
+    select_magnolia_fraseri(session)
+    session$setInputs(gbif_limit = 0, apply_date_filter = FALSE, exclude_inat = FALSE,
+                      include_synonyms = FALSE, reference_selection = "gbif", require_name_match = TRUE)
+    session$setInputs(loadGBIF = 1)
+    expect_null(last_gather())
+    expect_equal(nrow(analysis_data()), 0)
+  })
+})
+
+test_that("the standard-download summary separates requested from retrieved (L-5)", {
+  mock_gbif()
+  analysis_data <- reactiveVal(data.frame()); selected_points <- reactiveVal(numeric(0))
+  testServer(controlsModuleServer, args = list(analysis_data = analysis_data, selected_points = selected_points), {
+    select_magnolia_fraseri(session)
+    session$setInputs(gbif_limit = 100, apply_date_filter = FALSE, exclude_inat = FALSE,
+                      include_synonyms = FALSE, reference_selection = "gbif", require_name_match = TRUE)
+    session$setInputs(loadGBIF = 1)
+    session$elapse(600)                                   # the counts are debounced
+    html <- as.character(output$gbif_summary_display$html)
+    expect_true(grepl("100 records requested", html, fixed = TRUE))
+    expect_true(grepl(sprintf("%d retrieved", last_gather()$steps$raw), html, fixed = TRUE))
+  })
+})

@@ -47,10 +47,17 @@ test_that("scientific-name matching keeps the selected taxon and its infraspecif
 })
 
 test_that("the name-match filter is on by default and reported as a step", {
-  f <- gbif_apply_filters(pool, taxon_name = TAXON, include_synonyms = TRUE)
+  # a record GBIF filed under a different accepted name (a re-assigned match)
+  stray <- pool[1, ]
+  stray$gbifID <- "stray1"; stray$genus <- "Quercus"; stray$specificEpithet <- "alba"
+  stray$infraspecificEpithet <- NA; stray$acceptedScientificName <- "Quercus alba L."
+  mixed <- dplyr::bind_rows(pool, stray)
+  f <- gbif_apply_filters(mixed, taxon_name = TAXON)
   expect_equal(f$steps$scientific_name_matches, sum(gbif_name_matches(pool, TAXON)))
-  off <- gbif_apply_filters(pool, taxon_name = TAXON, include_synonyms = TRUE, require_name_match = FALSE)
+  expect_false("stray1" %in% f$data$gbifID)
+  off <- gbif_apply_filters(mixed, taxon_name = TAXON, require_name_match = FALSE)
   expect_null(off$steps$scientific_name_matches)
+  expect_true("stray1" %in% off$data$gbifID)
   expect_gt(nrow(off$data), nrow(f$data))
   none <- gbif_apply_filters(pool, taxon_name = NULL)              # no name known -> no filtering
   expect_null(none$steps$scientific_name_matches)
@@ -75,9 +82,12 @@ test_that("iNaturalist, fossil and date filters work", {
   fossil_pool$basisOfRecord[1:3] <- "FOSSIL_SPECIMEN"
   expect_false(any(gbif_apply_filters(fossil_pool)$data$basisOfRecord == "FOSSIL_SPECIMEN"))
 
-  dated <- gbif_apply_filters(pool, date_range = as.Date(c("2015-01-01", "2018-12-31")))
+  # fixture years are 2010, 2011 and 2023-2026: this range keeps some, not all (L-13)
+  dated <- gbif_apply_filters(pool, date_range = as.Date(c("2023-01-01", "2024-12-31")))
+  expect_gt(nrow(dated$data), 0)
+  expect_lt(nrow(dated$data), nrow(pool))
   yrs <- as.integer(substr(dated$data$eventDate, 1, 4))
-  expect_true(all(yrs >= 2015 & yrs <= 2018))
+  expect_true(all(yrs >= 2023 & yrs <= 2024))
   expect_equal(dated$steps$in_date_range, nrow(dated$data))
 })
 
@@ -330,4 +340,101 @@ test_that("gbif_select_records(method = 'spatial') keeps G first and honours the
   expect_equal(sum(s$basisOfRecord == "LIVING_SPECIMEN"), 3)
   expect_equal(length(unique(s$cluster[s$basisOfRecord != "LIVING_SPECIMEN"])), 6)
   expect_error(gbif_select_records(p, limit = 5, method = "nope"))
+})
+
+
+# --- T-06 (audit M-3, M-4, M-5) ---------------------------------------------------
+
+test_that("every GBIF request carries a timeout (M-3)", {
+  expect_gt(GBIF_CURLOPTS$timeout_ms, 0)
+  expect_gt(GBIF_CURLOPTS$connecttimeout_ms, 0)
+  seen <- NULL
+  out <- gbif_occ_search(taxonKey = 1, limit = 0, .search = function(...) { seen <<- list(...); "ok" })
+  expect_equal(out, "ok")
+  expect_identical(seen$curlopts, GBIF_CURLOPTS)
+  expect_equal(seen$taxonKey, 1)
+  # the three callers go through the wrapper by default
+  expect_identical(formals(gbif_fetch_standard)$occ, quote(gbif_occ_search))
+  expect_identical(formals(gbif_fetch)$occ, quote(gbif_occ_search))
+  expect_identical(formals(gbif_counts)$occ, quote(gbif_occ_search))
+  # and nothing else in the pipeline calls rgbif directly
+  src <- readLines(file.path(app_root, "R", "gbif_functions.R"), warn = FALSE)
+  code <- src[!grepl("^\\s*#", src)]
+  expect_equal(sum(grepl("rgbif::occ_search", code, fixed = TRUE)), 1)
+})
+
+test_that("gbif_counts and gbif_fetch use the injected search function", {
+  calls <- 0
+  fake <- function(...) { calls <<- calls + 1; list(meta = list(count = 7L), data = NULL) }
+  expect_equal(gbif_counts(1, occ = fake), list(total = 7L, living = 7L, inat = 7L))
+  expect_equal(calls, 3)
+  timed_out <- function(...) stop("Timeout was reached")
+  expect_true(all(is.na(unlist(gbif_counts(1, occ = timed_out)))))    # a timeout degrades to NA counts
+  expect_error(gbif_fetch(1, living_limit = 10, other_limit = 10, occ = timed_out), "Timeout")
+})
+
+test_that("including synonyms brings synonym records back with the name check on (M-4)", {
+  syn_ids <- pool$gbifID[pool$taxonomicStatus != "ACCEPTED"]
+  expect_gt(length(syn_ids), 0)
+  without <- gbif_apply_filters(pool, taxon_name = TAXON, include_synonyms = FALSE)
+  with    <- gbif_apply_filters(pool, taxon_name = TAXON, include_synonyms = TRUE)
+  expect_false(any(syn_ids %in% without$data$gbifID))
+  expect_true(all(syn_ids %in% with$data$gbifID))
+  expect_equal(nrow(with$data), nrow(without$data) + length(syn_ids))
+
+  # only synonyms OF THE SELECTED TAXON come back
+  other <- pool[pool$gbifID %in% syn_ids[1], ]
+  other$gbifID <- "othersyn"; other$acceptedScientificName <- "Magnolia macrophylla Michx."
+  res <- gbif_apply_filters(dplyr::bind_rows(pool, other), taxon_name = TAXON, include_synonyms = TRUE)
+  expect_false("othersyn" %in% res$data$gbifID)
+})
+
+test_that("accepted-name matching ignores authorship and rank markers", {
+  d <- data.frame(acceptedScientificName = c(
+    "Magnolia fraseri Walter", "Magnolia fraseri var. pyramidata (W.Bartram) Pamp.",
+    "Magnolia fraseriana Hort.", "Magnolia macrophylla Michx.", NA))
+  expect_equal(gbif_accepted_name_matches(d, "Magnolia fraseri"), c(TRUE, TRUE, FALSE, FALSE, FALSE))
+  expect_equal(gbif_accepted_name_matches(d, "Magnolia fraseri pyramidata"), c(FALSE, TRUE, FALSE, FALSE, FALSE))
+  expect_equal(gbif_accepted_name_matches(data.frame(x = 1:2), "Magnolia fraseri"), c(FALSE, FALSE))
+})
+
+test_that("a date filter no longer overrides the reference-selection method (M-5)", {
+  f <- gbif_apply_filters(pool)$data
+  h_ids <- function(sel) sel$gbifID[sel$basisOfRecord != "LIVING_SPECIMEN"]
+  pick <- function(method) gbif_select_records(f, limit = 60, method = method, yearly_spread = TRUE)
+
+  by_gbif <- pick("gbif"); by_spatial <- pick("spatial"); by_recent <- pick("recent")
+  set.seed(1); r1 <- pick("random"); set.seed(2); r2 <- pick("random")
+  for (sel in list(by_gbif, by_spatial, by_recent, r1)) {
+    expect_equal(nrow(sel), 60)
+    expect_false(any(duplicated(sel$gbifID)))
+    expect_false("year_val" %in% names(sel))
+  }
+  expect_false(setequal(h_ids(by_spatial), h_ids(by_gbif)))
+  expect_false(setequal(h_ids(by_recent), h_ids(by_gbif)))
+  expect_false(setequal(h_ids(r1), h_ids(r2)))                       # "differs on every run"
+  expect_gt(mean_nn_distance(by_spatial[by_spatial$basisOfRecord != "LIVING_SPECIMEN", ]),
+            mean_nn_distance(by_gbif[by_gbif$basisOfRecord != "LIVING_SPECIMEN", ]))
+
+  # every method still covers every year in the pool first
+  h_pool <- f[f$basisOfRecord != "LIVING_SPECIMEN", ]
+  n_years <- length(unique(substr(h_pool$eventDate, 1, 4)))
+  for (sel in list(by_gbif, by_spatial, by_recent, r1)) {
+    expect_equal(length(unique(substr(sel$eventDate[sel$basisOfRecord != "LIVING_SPECIMEN"], 1, 4))), n_years)
+  }
+  # "recent": the record kept for each year is that year's latest
+  rec_h <- by_recent[by_recent$basisOfRecord != "LIVING_SPECIMEN", ]
+  latest_2023 <- max(gbif_parse_date(h_pool$eventDate[substr(h_pool$eventDate, 1, 4) == "2023"]), na.rm = TRUE)
+  expect_true(latest_2023 %in% gbif_parse_date(rec_h$eventDate))
+
+  # end to end: gbif_gather with a date range honours the method
+  range <- as.Date(c("1900-01-01", "2030-12-31"))
+  g_gbif <- gbif_gather(3153619, limit = 60, date_range = range, method = "gbif", pool = pool)
+  g_spat <- gbif_gather(3153619, limit = 60, date_range = range, method = "spatial", pool = pool)
+  expect_false(setequal(g_gbif$data$`Accession Number`, g_spat$data$`Accession Number`))
+})
+
+test_that("gbif_gather reports the number of records asked for (L-5)", {
+  g <- gbif_gather(3153619, limit = 100, pool = pool)
+  expect_equal(g$limit, 100)
 })

@@ -42,6 +42,22 @@ GBIF_RAW_FIELDS <- c(
   "stateProvince", "recordedBy"
 )
 
+# Every request to GBIF goes through gbif_occ_search(), which adds these curl
+# options. libcurl has no overall timeout by default, and Shiny runs one R
+# process for every session on it, so a single stalled response would freeze
+# all users (audit M-3). A request that exceeds these limits raises an error,
+# which the callers already turn into NA counts or a "download failed" toast.
+#   timeout_ms         whole request, including the body
+#   connecttimeout_ms  establishing the connection
+#   low_speed_*        abort when under 1 byte/s for 20 s (a stalled body)
+GBIF_CURLOPTS <- list(http_version = 2, timeout_ms = 60000, connecttimeout_ms = 10000,
+                      low_speed_limit = 1, low_speed_time = 20)
+
+# The only place the pipeline calls rgbif. `.search` is injectable for tests.
+gbif_occ_search <- function(..., .search = rgbif::occ_search) {
+  .search(..., curlopts = GBIF_CURLOPTS)
+}
+
 # GBIF's interpreted name for each record, as a canonical string
 # ("Genus epithet [infraepithet]", no authorship, no rank marker) built from the
 # interpreted genus / specificEpithet / infraspecificEpithet fields. This is the
@@ -71,13 +87,30 @@ gbif_name_matches <- function(df, taxon_name) {
   }
 }
 
+# Does the record's ACCEPTED name belong to the requested taxon? Used to bring
+# synonym records back (audit M-4): a record filed under a synonym carries the
+# synonym's own genus / epithet, so gbif_name_matches() rejects it, but GBIF
+# also reports the accepted name it resolves to, e.g.
+# "Magnolia fraseri var. pyramidata (W.Bartram) Pamp." for a record labelled
+# Magnolia pyramidata. Rank markers are removed and the name is compared as a
+# word-bounded prefix, so authorship is ignored and "Magnolia fraseriana" does
+# not match "Magnolia fraseri".
+gbif_accepted_name_matches <- function(df, taxon_name) {
+  if (!"acceptedScientificName" %in% names(df)) return(rep(FALSE, nrow(df)))
+  acc <- as.character(df$acceptedScientificName)
+  acc <- gsub("\\s+(subsp|ssp|var|subvar|f|forma|subf|nothosubsp|nothovar)\\.?(?=\\s)", "", acc, perl = TRUE)
+  acc <- trimws(gsub("\\s+", " ", acc))
+  target <- trimws(taxon_name)
+  !is.na(acc) & (acc == target | startsWith(acc, paste0(target, " ")))
+}
+
 # Total / living / iNaturalist record counts with coordinates, as reported by the
 # GBIF index (these are BEFORE any of the app-side filters).
-gbif_counts <- function(taxon_key, event_date = NULL) {
+gbif_counts <- function(taxon_key, event_date = NULL, occ = gbif_occ_search) {
   count <- function(...) {
     tryCatch(
-      rgbif::occ_search(taxonKey = as.numeric(taxon_key), hasCoordinate = TRUE,
-                        eventDate = event_date, limit = 0, ...)$meta$count,
+      occ(taxonKey = as.numeric(taxon_key), hasCoordinate = TRUE,
+          eventDate = event_date, limit = 0, ...)$meta$count,
       error = function(e) NA_integer_
     )
   }
@@ -139,8 +172,8 @@ gbif_is_standard_request <- function(exclude_inat = FALSE, date_range = NULL, me
 # `keep(df)` is an optional row predicate (name match / synonym filter). Rows it
 # rejects are replaced by paging further with `start`, at most `max_rounds`
 # requests per query, so the result still hits `limit` when GBIF has enough.
-# `occ` is the rgbif search function (injectable for offline tests).
-gbif_fetch_standard <- function(taxon_key, limit, keep = NULL, occ = rgbif::occ_search,
+# `occ` is the GBIF search function (injectable for offline tests).
+gbif_fetch_standard <- function(taxon_key, limit, keep = NULL, occ = gbif_occ_search,
                                 progress = NULL, max_rounds = 4L) {
   report <- function(v, d) if (is.function(progress)) progress(v, d)
   limit <- max(0L, as.integer(limit))
@@ -183,11 +216,12 @@ gbif_fetch_standard <- function(taxon_key, limit, keep = NULL, occ = rgbif::occ_
 # unfiltered pool. NOTE the unfiltered query also returns living specimens, so
 # the pool contains duplicates by design; gbif_apply_filters() removes them by
 # gbifID.
-gbif_fetch <- function(taxon_key, living_limit, other_limit, event_date = NULL, progress = NULL) {
+gbif_fetch <- function(taxon_key, living_limit, other_limit, event_date = NULL, progress = NULL,
+                       occ = gbif_occ_search) {
   report <- function(v, d) if (is.function(progress)) progress(v, d)
   get <- function(limit, ...) {
     if (limit <= 0) return(data.frame())
-    res <- rgbif::occ_search(
+    res <- occ(
       taxonKey = as.numeric(taxon_key), hasCoordinate = TRUE,
       eventDate = event_date, limit = limit, ...
     )
@@ -220,9 +254,14 @@ gbif_apply_filters <- function(df, include_synonyms = FALSE, exclude_inat = FALS
   # The taxonKey query returns whatever GBIF's backbone matching assigned to the
   # key. Check the record's own interpreted scientific name against the name
   # that was selected, so records GBIF re-assigned (fuzzy or higher-rank matches)
-  # are dropped rather than silently attributed to this taxon.
+  # are dropped rather than silently attributed to this taxon. With "include
+  # synonyms" on, a record filed under a synonym is kept when the accepted name
+  # GBIF resolves it to is the selected taxon (audit M-4); without this the
+  # synonym toggle did nothing while the name check was on.
   if (isTRUE(require_name_match) && !is.null(taxon_name) && nzchar(taxon_name)) {
-    df <- df[gbif_name_matches(df, taxon_name), , drop = FALSE]
+    keep <- gbif_name_matches(df, taxon_name)
+    if (isTRUE(include_synonyms)) keep <- keep | gbif_accepted_name_matches(df, taxon_name)
+    df <- df[keep, , drop = FALSE]
     steps$scientific_name_matches <- nrow(df)
   }
 
@@ -262,6 +301,15 @@ gbif_apply_filters <- function(df, include_synonyms = FALSE, exclude_inat = FALS
 # most-recent order.
 select_spatially_spread <- function(df, n) {
   if (nrow(df) <= n) return(df)
+  spatial_spread_order(df, n)
+}
+
+# The same selection as an ordering: the first `n` rows of the result are the
+# spatially spread subset, in the order they were picked. With n = nrow(df)
+# every row is ranked, which is what the yearly spread needs (audit M-5).
+spatial_spread_order <- function(df, n = nrow(df)) {
+  if (nrow(df) <= 1) return(df)
+  n <- min(n, nrow(df))
   df <- dplyr::arrange(df, dplyr::desc(gbif_parse_date(eventDate)))
   lat <- as.numeric(df$decimalLatitude)
   lon <- as.numeric(df$decimalLongitude)
@@ -291,7 +339,11 @@ select_spatially_spread <- function(df, n) {
 # is what the standard download gives), "recent" (most recent eventDate first,
 # at day precision via gbif_parse_date(); undated records last),
 # "random", or "spatial" (see select_spatially_spread). When a date range was
-# applied, one record per year is taken first so the range is spread evenly.
+# applied (`yearly_spread`), the reference records are first ordered by
+# `method`, then the first record of each year in that order is taken so the
+# range is spread evenly, and the remaining slots are filled in the same order.
+# The method therefore still decides which records are kept (audit M-5: the
+# yearly spread used to replace it, so every method returned GBIF order).
 gbif_select_records <- function(df, limit, method = c("gbif", "recent", "random", "spatial"),
                                 yearly_spread = FALSE, random = NULL) {
   if (isTRUE(random)) method <- "random"          # backwards compatibility
@@ -304,21 +356,26 @@ gbif_select_records <- function(df, limit, method = c("gbif", "recent", "random"
   remaining <- limit - nrow(living)
   if (remaining <= 0 || nrow(other) == 0) return(living)
 
+  n_pick <- min(remaining, nrow(other))
   if (isTRUE(yearly_spread)) {
-    other$year_val <- suppressWarnings(as.integer(substr(other$eventDate, 1, 4)))
-    yearly_unique <- other |> dplyr::group_by(year_val) |> dplyr::slice_head(n = 1) |> dplyr::ungroup()
-    remainder <- other |> dplyr::filter(!gbifID %in% yearly_unique$gbifID)
-    picked <- dplyr::bind_rows(yearly_unique, remainder) |>
-      dplyr::slice_head(n = min(remaining, nrow(other))) |>
-      dplyr::select(-year_val)
+    ordered <- switch(method,
+      random  = other[sample.int(nrow(other)), , drop = FALSE],
+      spatial = spatial_spread_order(other),
+      recent  = dplyr::arrange(other, dplyr::desc(gbif_parse_date(eventDate))),
+      other
+    )
+    year_val <- suppressWarnings(as.integer(substr(ordered$eventDate, 1, 4)))
+    first_of_year <- !duplicated(year_val)
+    picked <- dplyr::bind_rows(ordered[first_of_year, , drop = FALSE], ordered[!first_of_year, , drop = FALSE]) |>
+      dplyr::slice_head(n = n_pick)
   } else if (method == "random") {
-    picked <- dplyr::slice_sample(other, n = min(remaining, nrow(other)))
+    picked <- dplyr::slice_sample(other, n = n_pick)
   } else if (method == "spatial") {
-    picked <- select_spatially_spread(other, n = min(remaining, nrow(other)))
+    picked <- select_spatially_spread(other, n = n_pick)
   } else if (method == "recent") {
-    picked <- other |> dplyr::arrange(dplyr::desc(gbif_parse_date(eventDate))) |> dplyr::slice_head(n = min(remaining, nrow(other)))
+    picked <- other |> dplyr::arrange(dplyr::desc(gbif_parse_date(eventDate))) |> dplyr::slice_head(n = n_pick)
   } else {
-    picked <- dplyr::slice_head(other, n = min(remaining, nrow(other)))
+    picked <- dplyr::slice_head(other, n = n_pick)
   }
   dplyr::bind_rows(living, picked)
 }
@@ -395,6 +452,7 @@ gbif_gather <- function(taxon_key, limit, include_synonyms = FALSE, exclude_inat
     pool  = pool,
     steps = steps,
     mode  = mode,
+    limit = limit,                 # what was asked for (steps$raw is what came back)
     n_g   = sum(data$`Current Germplasm Type` == "G"),
     n_h   = sum(data$`Current Germplasm Type` == "H")
   )
