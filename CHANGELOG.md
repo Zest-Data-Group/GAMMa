@@ -73,6 +73,9 @@ citation and the report filename. Tag releases in git as `vX.Y.Z`.
   clear when the dataset empties, and Run Gap Analysis says so when there is
   nothing to analyse. Banner and footer icons now render (T-08, audit M-6,
   M-7, M-8, M-10, L-7, L-8).
+- CI: tests also run on pushes to `dev`, and the runner is pinned to Ubuntu
+  24.04. `ubuntu-latest` had moved to 26.04, where the locked s2 1.1.9 does
+  not install, so the test step had not run since at least 2026-10-12.
 
 ## 1.1.0 (2026-09-23, deployed to shinyapps.io GAMMA_dev)
 

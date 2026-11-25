@@ -11,7 +11,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned on purpose. `ubuntu-latest` moved to Ubuntu 26.04, where the s2
+    # version in renv.lock (1.1.9, built from source) no longer installs, and
+    # sf, leaflet, leaflet.extras and rmapshaper fail with it. 24.04 is what
+    # the app is developed on. Move this when renv.lock is refreshed.
+    runs-on: ubuntu-24.04
     env:
       RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/latest
       CI: true
